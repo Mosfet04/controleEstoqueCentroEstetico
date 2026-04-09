@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from '@/components/ui/sonner'
+import { InstallPrompt } from '@/components/install-prompt'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -10,6 +11,12 @@ export const metadata: Metadata = {
   title: 'Stock Beauty Clinic',
   description: 'Sistema de Controle de Estoque para Clínica Estética',
   generator: 'v0.app',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Stock Beauty Clinic',
+  },
   icons: {
     icon: [
       {
@@ -47,6 +54,7 @@ export default function RootLayout({
       <body className={`${inter.className} antialiased`}>
         {children}
         <Toaster position="top-right" richColors />
+        <InstallPrompt />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
