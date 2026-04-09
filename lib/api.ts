@@ -170,6 +170,25 @@ export interface DashboardApi {
     quantidadeMinima: number
     status: string
   }[]
+  movimentacaoColaborador: {
+    nome: string
+    uso: number
+    descarte: number
+    ajuste: number
+    total: number
+  }[]
+  volumePorTipo: { tipo: string; total: number }[]
+  topDescartes: { nome: string; total: number; motivo: string }[]
+  insumosZerados: { nome: string; tipo: string; fornecedor: string }[]
+  fornecedores: { nome: string; total: number }[]
+  atividadeRecente: {
+    id: string
+    insumoNome: string
+    responsavel: string
+    tipo: string
+    quantidade: number
+    dataRetirada: string
+  }[]
 }
 
 export const dashboardApi = {

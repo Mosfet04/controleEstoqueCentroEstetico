@@ -97,6 +97,164 @@ export async function GET(request: NextRequest) {
         status: i.status,
       }))
 
+    // --- Enrichment queries ---
+    const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, now.getDate())
+
+    const [movColabRaw, volTipoRaw, descartesRaw, fornecedoresRaw, atividadeRaw] = await Promise.all([
+      prisma.saidaInsumo.groupBy({
+        by: ['userId', 'tipo'],
+        _sum: { quantidade: true },
+        where: { dataRetirada: { gte: startOfMonth, lte: endOfMonth } },
+      }),
+      prisma.saidaInsumo.groupBy({
+        by: ['tipo'],
+        _sum: { quantidade: true },
+        where: { dataRetirada: { gte: startOfMonth, lte: endOfMonth } },
+      }),
+      prisma.saidaInsumo.groupBy({
+        by: ['insumoId'],
+        _sum: { quantidade: true },
+        where: {
+          tipo: 'descarte',
+          dataRetirada: { gte: startOfMonth, lte: endOfMonth },
+        },
+        orderBy: { _sum: { quantidade: 'desc' } },
+        take: 5,
+      }),
+      prisma.insumo.groupBy({
+        by: ['fornecedor'],
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 5,
+      }),
+      prisma.saidaInsumo.findMany({
+        take: 10,
+        orderBy: { dataRetirada: 'desc' },
+        include: {
+          insumo: { select: { nome: true } },
+          user: { select: { name: true } },
+        },
+      }),
+    ])
+
+    // Movimentação por colaborador
+    const colabUserIds = [...new Set(movColabRaw.map((r) => r.userId))]
+    const colabUsers =
+      colabUserIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: colabUserIds } },
+            select: { id: true, name: true },
+          })
+        : []
+    const colabUserMap = Object.fromEntries(colabUsers.map((u) => [u.id, u.name]))
+    const colabPivot = new Map<
+      string,
+      { nome: string; uso: number; descarte: number; ajuste: number }
+    >()
+    for (const row of movColabRaw) {
+      const existing = colabPivot.get(row.userId) ?? {
+        nome: colabUserMap[row.userId] ?? 'Desconhecido',
+        uso: 0,
+        descarte: 0,
+        ajuste: 0,
+      }
+      if (row.tipo === 'uso') existing.uso = row._sum.quantidade ?? 0
+      else if (row.tipo === 'descarte') existing.descarte = row._sum.quantidade ?? 0
+      else if (row.tipo === 'ajuste') existing.ajuste = row._sum.quantidade ?? 0
+      colabPivot.set(row.userId, existing)
+    }
+    const movimentacaoColaborador = Array.from(colabPivot.values())
+      .map((c) => ({ ...c, total: c.uso + c.descarte + c.ajuste }))
+      .sort((a, b) => b.total - a.total)
+
+    // Volume por tipo de saída
+    const volumePorTipo = volTipoRaw.map((r) => ({
+      tipo: r.tipo,
+      total: r._sum.quantidade ?? 0,
+    }))
+
+    // Top descartes
+    const descarteInsumoIds = descartesRaw.map((r) => r.insumoId)
+    const [descarteInsumos, descarteSaidas] =
+      descarteInsumoIds.length > 0
+        ? await Promise.all([
+            prisma.insumo.findMany({
+              where: { id: { in: descarteInsumoIds } },
+              select: { id: true, nome: true },
+            }),
+            prisma.saidaInsumo.findMany({
+              where: {
+                tipo: 'descarte',
+                insumoId: { in: descarteInsumoIds },
+                dataRetirada: { gte: startOfMonth, lte: endOfMonth },
+              },
+              select: { insumoId: true, motivo: true },
+            }),
+          ])
+        : [[], []]
+    const descarteNameMap = Object.fromEntries(
+      descarteInsumos.map((i) => [i.id, i.nome])
+    )
+    const motivoCountMap = new Map<string, Map<string, number>>()
+    for (const s of descarteSaidas) {
+      if (!s.motivo) continue
+      const insumoMotivos =
+        motivoCountMap.get(s.insumoId) ?? new Map<string, number>()
+      insumoMotivos.set(s.motivo, (insumoMotivos.get(s.motivo) ?? 0) + 1)
+      motivoCountMap.set(s.insumoId, insumoMotivos)
+    }
+    const topDescartes = descartesRaw.map((r) => {
+      const motivos = motivoCountMap.get(r.insumoId)
+      let topMotivo = '-'
+      if (motivos) {
+        topMotivo =
+          [...motivos.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '-'
+      }
+      return {
+        nome: descarteNameMap[r.insumoId] ?? 'Desconhecido',
+        total: r._sum.quantidade ?? 0,
+        motivo: topMotivo,
+      }
+    })
+
+    // Insumos zerados (agrupado por nome, exclui inativos >2 meses)
+    const recentInsumos = allInsumos.filter((i) => i.updatedAt >= twoMonthsAgo)
+    const zeradoMap = new Map<
+      string,
+      { quantidade: number; tipo: string; fornecedor: string }
+    >()
+    for (const i of recentInsumos) {
+      const existing = zeradoMap.get(i.nome)
+      if (existing) {
+        existing.quantidade += i.quantidade
+      } else {
+        zeradoMap.set(i.nome, {
+          quantidade: i.quantidade,
+          tipo: i.tipo,
+          fornecedor: i.fornecedor,
+        })
+      }
+    }
+    const insumosZerados = [...zeradoMap.entries()]
+      .filter(([, v]) => v.quantidade === 0)
+      .map(([nome, v]) => ({ nome, tipo: v.tipo, fornecedor: v.fornecedor }))
+
+    // Fornecedores
+    const fornecedores = fornecedoresRaw.map((r) => ({
+      nome: r.fornecedor,
+      total: r._count.id,
+    }))
+
+    // Atividade recente
+    const atividadeRecente = atividadeRaw.map((s) => ({
+      id: s.id,
+      insumoNome: s.insumo.nome,
+      responsavel: s.user.name,
+      tipo: s.tipo,
+      quantidade: s.quantidade,
+      dataRetirada: s.dataRetirada.toISOString(),
+    }))
+
     return NextResponse.json({
       metrics,
       byTipo,
@@ -105,6 +263,12 @@ export async function GET(request: NextRequest) {
       vencendo30,
       vencendo60,
       criticos,
+      movimentacaoColaborador,
+      volumePorTipo,
+      topDescartes,
+      insumosZerados,
+      fornecedores,
+      atividadeRecente,
     })
   } catch (error) {
     Sentry.captureException(error, { tags: { route: 'GET /api/dashboard' } })
