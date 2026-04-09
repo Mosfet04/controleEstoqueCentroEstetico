@@ -1,25 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
 import { prisma } from '@/lib/prisma'
-import { requireAuth, isUser, getUnidadeId, requireUnidadeAccess } from '@/lib/auth-helpers'
+import { requireAuth, isUser, getUnidadeIdOrGlobal, requireUnidadeAccessOrGlobal } from '@/lib/auth-helpers'
 import { saidaSchema } from '@/lib/validations'
 
 export async function GET(request: NextRequest) {
   const user = await requireAuth(request)
   if (!isUser(user)) return user
 
-  const rawUnidadeId = getUnidadeId(request)
+  const rawUnidadeId = getUnidadeIdOrGlobal(request)
   if (rawUnidadeId instanceof NextResponse) return rawUnidadeId
 
-  const unidadeId = await requireUnidadeAccess(user, rawUnidadeId)
+  const unidadeId = await requireUnidadeAccessOrGlobal(user, rawUnidadeId)
   if (unidadeId instanceof NextResponse) return unidadeId
 
   try {
     const saidas = await prisma.saidaInsumo.findMany({
-      where: { unidadeId },
+      where: { ...(unidadeId ? { unidadeId } : {}) },
       include: {
         insumo: { select: { nome: true, lote: true } },
         user: { select: { name: true, email: true } },
+        unidade: { select: { nome: true } },
       },
       orderBy: { dataRetirada: 'desc' },
     })
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest) {
       observacao: s.observacao,
       dataRetirada: s.dataRetirada,
       createdAt: s.createdAt,
+      unidadeNome: s.unidade.nome,
     }))
 
     return NextResponse.json(formatted)
@@ -49,11 +51,18 @@ export async function POST(request: NextRequest) {
   const user = await requireAuth(request)
   if (!isUser(user)) return user
 
-  const rawUnidadeId = getUnidadeId(request)
+  const rawUnidadeId = getUnidadeIdOrGlobal(request)
   if (rawUnidadeId instanceof NextResponse) return rawUnidadeId
 
-  const unidadeId = await requireUnidadeAccess(user, rawUnidadeId)
+  const unidadeId = await requireUnidadeAccessOrGlobal(user, rawUnidadeId)
   if (unidadeId instanceof NextResponse) return unidadeId
+
+  if (unidadeId === null) {
+    return NextResponse.json(
+      { error: 'Selecione uma unidade específica para registrar saídas' },
+      { status: 400 }
+    )
+  }
 
   try {
     const body = await request.json()

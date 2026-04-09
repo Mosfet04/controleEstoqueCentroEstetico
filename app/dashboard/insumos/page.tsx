@@ -41,6 +41,7 @@ import {
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Plus, Search, Pencil, Trash2 } from 'lucide-react'
 import { insumosApi, InsumoApi, ApiError } from '@/lib/api'
+import { useUnidade } from '@/contexts/unidade-context'
 
 type TipoInsumo = 'injetavel' | 'descartavel' | 'peeling'
 type StatusEstoque = 'bom' | 'atencao' | 'critico'
@@ -79,6 +80,7 @@ function TipoBadge({ tipo }: { tipo: TipoInsumo }) {
 }
 
 interface InsumoFormData {
+  unidadeId: string
   nome: string
   lote: string
   tipo: TipoInsumo
@@ -90,6 +92,7 @@ interface InsumoFormData {
 }
 
 const initialFormData: InsumoFormData = {
+  unidadeId: '',
   nome: '',
   lote: '',
   tipo: 'injetavel',
@@ -101,6 +104,7 @@ const initialFormData: InsumoFormData = {
 }
 
 export default function InsumosPage() {
+  const { isGlobalView, unidades, unidadeAtiva } = useUnidade()
   const [insumos, setInsumos] = useState<InsumoApi[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [filterTipo, setFilterTipo] = useState<TipoInsumo | 'all'>('all')
@@ -139,6 +143,7 @@ export default function InsumosPage() {
     if (insumo) {
       setEditingInsumo(insumo)
       setFormData({
+        unidadeId: insumo.unidadeId,
         nome: insumo.nome,
         lote: insumo.lote,
         tipo: insumo.tipo,
@@ -150,13 +155,21 @@ export default function InsumosPage() {
       })
     } else {
       setEditingInsumo(null)
-      setFormData(initialFormData)
+      setFormData({
+        ...initialFormData,
+        unidadeId: unidadeAtiva?.id ?? unidades.filter((u) => u.ativa)[0]?.id ?? '',
+      })
     }
     setIsDialogOpen(true)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!formData.unidadeId) {
+      toast.error('Selecione uma unidade')
+      return
+    }
 
     const payload = {
       nome: formData.nome,
@@ -174,7 +187,7 @@ export default function InsumosPage() {
         await insumosApi.update(editingInsumo.id, payload)
         toast.success('Insumo atualizado com sucesso!')
       } else {
-        await insumosApi.create(payload)
+        await insumosApi.create(payload, formData.unidadeId)
         toast.success('Insumo cadastrado com sucesso!')
       }
       setIsDialogOpen(false)
@@ -227,6 +240,28 @@ export default function InsumosPage() {
             </DialogHeader>
             <form onSubmit={handleSubmit}>
               <FieldGroup>
+                <Field>
+                  <FieldLabel>Unidade <span className="text-destructive">*</span></FieldLabel>
+                  {editingInsumo ? (
+                    <p className="text-sm py-2 px-3 rounded-md bg-muted text-muted-foreground">
+                      {unidades.find((u) => u.id === formData.unidadeId)?.nome ?? formData.unidadeId}
+                    </p>
+                  ) : (
+                    <Select
+                      value={formData.unidadeId}
+                      onValueChange={(v) => setFormData({ ...formData, unidadeId: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a unidade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {unidades.filter((u) => u.ativa).map((u) => (
+                          <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </Field>
                 <Field>
                   <FieldLabel>Nome</FieldLabel>
                   <Input
@@ -373,6 +408,7 @@ export default function InsumosPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  {isGlobalView && <TableHead>Unidade</TableHead>}
                   <TableHead>Nome</TableHead>
                   <TableHead>Lote</TableHead>
                   <TableHead>Tipo</TableHead>
@@ -380,19 +416,22 @@ export default function InsumosPage() {
                   <TableHead className="text-center">Qtd.</TableHead>
                   <TableHead>Vencimento</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  {!isGlobalView && <TableHead className="text-right">Ações</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredInsumos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={isGlobalView ? 8 : 8} className="text-center py-8 text-muted-foreground">
                       Nenhum insumo encontrado
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredInsumos.map((insumo) => (
                     <TableRow key={insumo.id}>
+                      {isGlobalView && (
+                        <TableCell className="text-muted-foreground text-sm">{insumo.unidadeNome}</TableCell>
+                      )}
                       <TableCell className="font-medium">{insumo.nome}</TableCell>
                       <TableCell className="text-muted-foreground">{insumo.lote}</TableCell>
                       <TableCell><TipoBadge tipo={insumo.tipo} /></TableCell>
@@ -400,16 +439,18 @@ export default function InsumosPage() {
                       <TableCell className="text-center font-semibold">{insumo.quantidade}</TableCell>
                       <TableCell>{format(new Date(insumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
                       <TableCell><StatusBadge status={insumo.status} /></TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(insumo)}>
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => setDeleteId(insumo.id)}>
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                      {!isGlobalView && (
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(insumo)}>
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => setDeleteId(insumo.id)}>
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 )}

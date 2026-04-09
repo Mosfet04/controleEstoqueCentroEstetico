@@ -86,6 +86,8 @@ export interface InsumoApi {
   status: 'bom' | 'atencao' | 'critico'
   createdAt: string
   updatedAt: string
+  unidadeId: string
+  unidadeNome?: string
 }
 
 export interface InsumoPayload {
@@ -100,16 +102,23 @@ export interface InsumoPayload {
 }
 
 export const insumosApi = {
-  list: (params?: { q?: string; tipo?: string }) => {
+  list: (params?: { q?: string; tipo?: string; unidadeOverride?: string }) => {
     const search = new URLSearchParams()
     if (params?.q) search.set('q', params.q)
     if (params?.tipo) search.set('tipo', params.tipo)
     const qs = search.toString()
-    return apiFetch<InsumoApi[]>(`/api/insumos${qs ? `?${qs}` : ''}`)
+    return apiFetch<InsumoApi[]>(
+      `/api/insumos${qs ? `?${qs}` : ''}`,
+      params?.unidadeOverride ? { headers: { 'x-unidade-id': params.unidadeOverride } } : undefined
+    )
   },
   get: (id: string) => apiFetch<InsumoApi>(`/api/insumos/${id}`),
-  create: (data: InsumoPayload) =>
-    apiFetch<InsumoApi>('/api/insumos', { method: 'POST', body: JSON.stringify(data) }),
+  create: (data: InsumoPayload, unidadeOverride?: string) =>
+    apiFetch<InsumoApi>('/api/insumos', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...(unidadeOverride ? { headers: { 'x-unidade-id': unidadeOverride } } : {}),
+    }),
   update: (id: string, data: InsumoPayload) =>
     apiFetch<InsumoApi>(`/api/insumos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
@@ -132,6 +141,7 @@ export interface SaidaApi {
   observacao?: string | null
   dataRetirada: string
   createdAt: string
+  unidadeNome?: string
 }
 
 export const saidasApi = {
@@ -142,7 +152,12 @@ export const saidasApi = {
     tipo?: 'uso' | 'descarte' | 'ajuste'
     motivo?: string
     observacao?: string
-  }) => apiFetch<SaidaApi>('/api/saidas', { method: 'POST', body: JSON.stringify(data) }),
+  }, unidadeOverride?: string) =>
+    apiFetch<SaidaApi>('/api/saidas', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...(unidadeOverride ? { headers: { 'x-unidade-id': unidadeOverride } } : {}),
+    }),
 }
 
 // ---------------------------------------------------------------------------

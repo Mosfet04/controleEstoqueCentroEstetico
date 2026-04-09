@@ -99,3 +99,38 @@ export async function requireUnidadeAccess(
 
   return unidadeId
 }
+
+/**
+ * Like getUnidadeId but returns null when the header is "all" (global view).
+ * Used by routes that support the consolidated all-units view.
+ */
+export function getUnidadeIdOrGlobal(
+  request: NextRequest
+): string | null | NextResponse {
+  const unidadeId = request.headers.get('x-unidade-id')
+
+  if (!unidadeId) {
+    return NextResponse.json({ error: 'Unidade não selecionada' }, { status: 400 })
+  }
+
+  if (unidadeId === 'all') return null
+
+  return unidadeId
+}
+
+/**
+ * Like requireUnidadeAccess but accepts null (global view).
+ * null is only allowed for admins — clinicos receive 403.
+ */
+export async function requireUnidadeAccessOrGlobal(
+  user: AuthenticatedUser,
+  unidadeId: string | null
+): Promise<string | null | NextResponse> {
+  if (unidadeId === null) {
+    if (user.role !== UserRole.admin) {
+      return NextResponse.json({ error: 'Acesso negado a esta unidade' }, { status: 403 })
+    }
+    return null
+  }
+  return requireUnidadeAccess(user, unidadeId)
+}

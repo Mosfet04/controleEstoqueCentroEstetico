@@ -14,6 +14,7 @@ import {
   Loader2,
   Building2,
   ChevronDown,
+  Globe,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
@@ -37,7 +38,7 @@ const adminItems = [
 export function AppSidebar() {
   const pathname = usePathname()
   const { user, signOut } = useAuth()
-  const { unidades, unidadeAtiva, setUnidadeAtiva } = useUnidade()
+  const { unidades, unidadeAtiva, setUnidadeAtiva, setGlobalView, isGlobalView } = useUnidade()
   const [isOpen, setIsOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null)
@@ -80,12 +81,28 @@ export function AppSidebar() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm font-medium bg-sidebar-accent/50 hover:bg-sidebar-accent text-sidebar-foreground transition-colors">
-                <Building2 className="w-4 h-4 text-sidebar-primary shrink-0" />
-                <span className="truncate flex-1 text-left">{unidadeAtiva?.nome ?? 'Selecionar'}</span>
+                {isGlobalView
+                  ? <Globe className="w-4 h-4 text-sidebar-primary shrink-0" />
+                  : <Building2 className="w-4 h-4 text-sidebar-primary shrink-0" />}
+                <span className="truncate flex-1 text-left">
+                  {isGlobalView ? 'Todas as unidades' : (unidadeAtiva?.nome ?? 'Selecionar')}
+                </span>
                 <ChevronDown className="w-4 h-4 shrink-0 text-sidebar-foreground/60" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
+              {user?.role === 'admin' && (
+                <DropdownMenuItem
+                  onClick={() => {
+                    setGlobalView()
+                    window.location.reload()
+                  }}
+                  className={cn(isGlobalView && 'bg-accent')}
+                >
+                  <Globe className="w-4 h-4 mr-2" />
+                  Todas as unidades
+                </DropdownMenuItem>
+              )}
               {unidades.filter((u) => u.ativa).map((u) => (
                 <DropdownMenuItem
                   key={u.id}

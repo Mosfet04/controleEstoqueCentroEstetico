@@ -11,7 +11,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   Select,
@@ -34,11 +33,13 @@ import { Plus, PackageMinus, Search, Trash2, SlidersHorizontal } from 'lucide-re
 import { saidasApi, insumosApi, SaidaApi, InsumoApi, ApiError } from '@/lib/api'
 import { TipoSaida, TIPO_SAIDA_LABELS, MOTIVOS_DESCARTE, MOTIVOS_AJUSTE } from '@/lib/types'
 import { useAuth } from '@/contexts/auth-context'
+import { useUnidade } from '@/contexts/unidade-context'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
 
 interface SaidaFormData {
+  unidadeId: string
   insumoId: string
   quantidade: number
   tipo: TipoSaida
@@ -47,6 +48,7 @@ interface SaidaFormData {
 }
 
 const initialFormData: SaidaFormData = {
+  unidadeId: '',
   insumoId: '',
   quantidade: 1,
   tipo: 'uso',
@@ -68,6 +70,7 @@ const SUBMIT_LABELS: Record<TipoSaida, string> = {
 
 export default function SaidasPage() {
   const { user } = useAuth()
+  const { isGlobalView, unidades, unidadeAtiva } = useUnidade()
   const [saidas, setSaidas] = useState<SaidaApi[]>([])
   const [insumos, setInsumos] = useState<InsumoApi[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -79,17 +82,32 @@ export default function SaidasPage() {
 
   const loadData = async () => {
     try {
-      const [saidasData, insumosData] = await Promise.all([
-        saidasApi.list(),
-        insumosApi.list(),
-      ])
+      const saidasData = await saidasApi.list()
       setSaidas(saidasData)
-      setInsumos(insumosData.filter((i) => i.quantidade > 0))
     } catch (err) {
       if (err instanceof ApiError && err.status !== 401) {
-        toast.error('Erro ao carregar dados')
+        toast.error('Erro ao carregar saídas')
       }
     }
+  }
+
+  const loadInsumosForUnit = async (unitId: string) => {
+    try {
+      const data = await insumosApi.list({ unidadeOverride: unitId })
+      setInsumos(data.filter((i) => i.quantidade > 0))
+    } catch (err) {
+      if (err instanceof ApiError && err.status !== 401) {
+        toast.error('Erro ao carregar insumos')
+      }
+    }
+  }
+
+  const handleOpenDialog = async () => {
+    const defaultUnit = unidadeAtiva?.id ?? unidades.filter((u) => u.ativa)[0]?.id ?? ''
+    setFormData({ ...initialFormData, unidadeId: defaultUnit })
+    setError(null)
+    setIsDialogOpen(true)
+    if (defaultUnit) await loadInsumosForUnit(defaultUnit)
   }
 
   useEffect(() => {
@@ -112,6 +130,11 @@ export default function SaidasPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+
+    if (!formData.unidadeId) {
+      setError('Selecione uma unidade')
+      return
+    }
 
     if (!formData.insumoId) {
       setError('Selecione um insumo')
@@ -136,11 +159,12 @@ export default function SaidasPage() {
         tipo: formData.tipo,
         motivo: formData.motivo.trim() || undefined,
         observacao: formData.observacao.trim() || undefined,
-      })
+      }, formData.unidadeId)
       const label = TIPO_SAIDA_LABELS[formData.tipo]
       toast.success(`${label} registrado com sucesso!`)
       setIsDialogOpen(false)
       setFormData(initialFormData)
+      setInsumos([])
       await loadData()
     } catch (err) {
       if (err instanceof ApiError) {
@@ -164,16 +188,15 @@ export default function SaidasPage() {
           <h1 className="text-2xl font-bold text-foreground">Saídas</h1>
           <p className="text-muted-foreground">Registre uso clínico, descartes e ajustes de estoque</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open)
-          if (!open) { setFormData(initialFormData); setError(null) }
-        }}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Nova Saída
-            </Button>
-          </DialogTrigger>
+        <Button onClick={handleOpenDialog}>
+          <Plus className="w-4 h-4 mr-2" />
+          Nova Saída
+        </Button>
+      </div>
+
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        if (!open) { setIsDialogOpen(false); setFormData(initialFormData); setError(null); setInsumos([]) }
+      }}>
           <DialogContent className="max-w-md" onInteractOutside={(e) => e.preventDefault()}>
             <DialogHeader>
               <DialogTitle>Registrar Saída</DialogTitle>
@@ -183,6 +206,27 @@ export default function SaidasPage() {
             </DialogHeader>
             <form onSubmit={handleSubmit}>
               <FieldGroup>
+                {/* Unidade */}
+                <Field>
+                  <FieldLabel>Unidade <span className="text-destructive">*</span></FieldLabel>
+                  <Select
+                    value={formData.unidadeId}
+                    onValueChange={async (v) => {
+                      setFormData({ ...formData, unidadeId: v, insumoId: '' })
+                      await loadInsumosForUnit(v)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a unidade" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {unidades.filter((u) => u.ativa).map((u) => (
+                        <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
                 {/* Tipo de saída */}
                 <Field>
                   <FieldLabel>Tipo de Saída</FieldLabel>
@@ -348,7 +392,6 @@ export default function SaidasPage() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
 
       {/* Filtros */}
       <Card>
@@ -399,6 +442,7 @@ export default function SaidasPage() {
                   <TableHead>Tipo</TableHead>
                   <TableHead className="text-center">Qtd</TableHead>
                   <TableHead>Responsável</TableHead>
+                  {isGlobalView && <TableHead>Unidade</TableHead>}
                   <TableHead>Data</TableHead>
                   <TableHead>Motivo / Observação</TableHead>
                 </TableRow>
@@ -406,7 +450,7 @@ export default function SaidasPage() {
               <TableBody>
                 {filteredSaidas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={isGlobalView ? 7 : 6} className="text-center py-8 text-muted-foreground">
                       Nenhuma saída registrada
                     </TableCell>
                   </TableRow>
@@ -431,6 +475,9 @@ export default function SaidasPage() {
                           </span>
                         </TableCell>
                         <TableCell>{saida.responsavel}</TableCell>
+                        {isGlobalView && (
+                          <TableCell className="text-muted-foreground text-sm">{saida.unidadeNome}</TableCell>
+                        )}
                         <TableCell className="whitespace-nowrap">
                           {format(new Date(saida.dataRetirada), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                         </TableCell>

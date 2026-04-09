@@ -8,6 +8,8 @@ interface UnidadeContextValue {
   unidades: UnidadeApi[]
   unidadeAtiva: UnidadeApi | null
   setUnidadeAtiva: (unidade: UnidadeApi) => void
+  setGlobalView: () => void
+  isGlobalView: boolean
   isLoading: boolean
   reloadUnidades: () => Promise<void>
 }
@@ -20,6 +22,7 @@ export function UnidadeProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [unidades, setUnidades] = useState<UnidadeApi[]>([])
   const [unidadeAtiva, setUnidadeAtivaState] = useState<UnidadeApi | null>(null)
+  const [isGlobalView, setIsGlobalView] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   const loadUnidades = useCallback(async () => {
@@ -35,13 +38,19 @@ export function UnidadeProvider({ children }: { children: ReactNode }) {
       setUnidades(list)
 
       const savedId = localStorage.getItem(STORAGE_KEY)
-      const saved = list.find((u) => u.id === savedId)
 
-      if (saved) {
-        setUnidadeAtivaState(saved)
-      } else if (list.length > 0) {
-        setUnidadeAtivaState(list[0])
-        localStorage.setItem(STORAGE_KEY, list[0].id)
+      if (savedId === 'all') {
+        setIsGlobalView(true)
+        setUnidadeAtivaState(null)
+      } else {
+        setIsGlobalView(false)
+        const saved = list.find((u) => u.id === savedId)
+        if (saved) {
+          setUnidadeAtivaState(saved)
+        } else if (list.length > 0) {
+          setUnidadeAtivaState(list[0])
+          localStorage.setItem(STORAGE_KEY, list[0].id)
+        }
       }
     } catch {
       setUnidades([])
@@ -56,12 +65,19 @@ export function UnidadeProvider({ children }: { children: ReactNode }) {
 
   const setUnidadeAtiva = useCallback((unidade: UnidadeApi) => {
     setUnidadeAtivaState(unidade)
+    setIsGlobalView(false)
     localStorage.setItem(STORAGE_KEY, unidade.id)
+  }, [])
+
+  const setGlobalView = useCallback(() => {
+    setUnidadeAtivaState(null)
+    setIsGlobalView(true)
+    localStorage.setItem(STORAGE_KEY, 'all')
   }, [])
 
   return (
     <UnidadeContext.Provider
-      value={{ unidades, unidadeAtiva, setUnidadeAtiva, isLoading, reloadUnidades: loadUnidades }}
+      value={{ unidades, unidadeAtiva, setUnidadeAtiva, setGlobalView, isGlobalView, isLoading, reloadUnidades: loadUnidades }}
     >
       {children}
     </UnidadeContext.Provider>
