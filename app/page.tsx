@@ -54,6 +54,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [isResetLoading, setIsResetLoading] = useState(false)
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
 
   const validateForm = () => {
@@ -133,21 +134,28 @@ export default function LoginPage() {
       return
     }
 
+    setIsResetLoading(true)
     try {
       await sendPasswordResetEmail(getFirebaseAuth(), email)
-      toast.success('E-mail de redefinição enviado! Verifique sua caixa de entrada.')
+      toast.success('E-mail de redefinição enviado! Verifique sua caixa de entrada (e a pasta de spam).')
     } catch (err) {
       const code = (err as AuthError)?.code ?? ''
-      // Não revelamos se o e-mail existe ou não (segurança)
       if (code === 'auth/user-not-found') {
+        // Não revelamos se o e-mail existe ou não (segurança)
         toast.success('Se este e-mail estiver cadastrado, você receberá as instruções.')
+      } else if (code === 'auth/invalid-email') {
+        setErrors((prev) => ({ ...prev, email: 'E-mail inválido' }))
+      } else if (code === 'auth/too-many-requests') {
+        toast.error('Muitas tentativas. Aguarde alguns minutos.')
       } else {
-        toast.error(getFirebaseErrorMessage(code))
+        toast.error(`Erro ao enviar e-mail (${code || 'desconhecido'}). Tente novamente.`)
       }
+    } finally {
+      setIsResetLoading(false)
     }
   }
 
-  const anyLoading = isLoading || isGoogleLoading
+  const anyLoading = isLoading || isGoogleLoading || isResetLoading
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-secondary/30 to-background p-4">
@@ -189,9 +197,10 @@ export default function LoginPage() {
                       type="button"
                       onClick={handleForgotPassword}
                       disabled={anyLoading}
-                      className="text-xs text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
+                      className="text-xs text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 flex items-center gap-1"
                     >
-                      Esqueceu a senha?
+                      {isResetLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                      {isResetLoading ? 'Enviando...' : 'Esqueceu a senha?'}
                     </button>
                   </div>
                   <div className="relative">
