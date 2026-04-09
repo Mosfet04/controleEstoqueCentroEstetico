@@ -10,6 +10,8 @@ import {
   TrendingDown,
   Clock,
   CheckCircle2,
+  Trash2,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { dashboardApi, DashboardApi } from '@/lib/api'
 import { format, differenceInDays } from 'date-fns'
@@ -153,12 +155,32 @@ export default function DashboardPage() {
           trendValue={metrics.insumosVencendo > 0 ? 'Atenção' : 'OK'}
         />
         <MetricCard
-          title="Movimentação Mês"
+          title="Uso Clínico Mês"
           value={metrics.saidasMes}
-          description="Saídas registradas"
+          description="Saídas de uso registradas"
           icon={CheckCircle2}
           trend="neutral"
           trendValue="Saídas"
+        />
+      </div>
+
+      {/* Métricas de descarte e ajuste */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <MetricCard
+          title="Descartes Mês"
+          value={metrics.descartesMes}
+          description="Produtos vencidos ou avariados"
+          icon={Trash2}
+          trend={metrics.descartesMes > 0 ? 'down' : 'neutral'}
+          trendValue={metrics.descartesMes > 0 ? 'Verificar lotes' : 'Sem descartes'}
+        />
+        <MetricCard
+          title="Ajustes Mês"
+          value={metrics.ajustesMes}
+          description="Correções de desvio de estoque"
+          icon={SlidersHorizontal}
+          trend={metrics.ajustesMes > 0 ? 'down' : 'neutral'}
+          trendValue={metrics.ajustesMes > 0 ? 'Revisar processos' : 'Sem ajustes'}
         />
       </div>
 

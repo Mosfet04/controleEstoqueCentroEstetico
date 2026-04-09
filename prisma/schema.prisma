@@ -17,6 +17,12 @@ enum TipoInsumo {
   peeling
 }
 
+enum TipoSaida {
+  uso
+  descarte
+  ajuste
+}
+
 model User {
   id          String    @id @default(cuid())
   firebaseUid String    @unique
@@ -52,17 +58,20 @@ model Insumo {
 }
 
 model SaidaInsumo {
-  id          String   @id @default(cuid())
-  insumoId    String
-  insumo      Insumo   @relation(fields: [insumoId], references: [id], onDelete: Restrict)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
-  quantidade  Int
-  observacao  String?
-  dataRetirada DateTime @default(now())
-  createdAt   DateTime  @default(now())
+  id           String    @id @default(cuid())
+  insumoId     String
+  insumo       Insumo    @relation(fields: [insumoId], references: [id], onDelete: Restrict)
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  quantidade   Int
+  tipo         TipoSaida @default(uso)
+  motivo       String?
+  observacao   String?
+  dataRetirada DateTime  @default(now())
+  createdAt    DateTime  @default(now())
 
   @@index([insumoId])
   @@index([userId])
   @@index([dataRetirada])
+  @@index([tipo])
 }

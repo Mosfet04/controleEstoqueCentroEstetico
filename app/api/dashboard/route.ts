@@ -15,10 +15,16 @@ export async function GET(request: NextRequest) {
     const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
     const sixtyDaysFromNow = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
 
-    const [allInsumos, saidasMes, topSaidas] = await Promise.all([
+    const [allInsumos, saidasMes, descartesMes, ajustesMes, topSaidas] = await Promise.all([
       prisma.insumo.findMany(),
       prisma.saidaInsumo.count({
-        where: { dataRetirada: { gte: startOfMonth, lte: endOfMonth } },
+        where: { dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'uso' },
+      }),
+      prisma.saidaInsumo.count({
+        where: { dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'descarte' },
+      }),
+      prisma.saidaInsumo.count({
+        where: { dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'ajuste' },
       }),
       prisma.saidaInsumo.groupBy({
         by: ['insumoId'],
@@ -44,6 +50,8 @@ export async function GET(request: NextRequest) {
       insumosCriticos: insumosWithStatus.filter((i) => i.status === 'critico').length,
       insumosAtencao: insumosWithStatus.filter((i) => i.status === 'atencao').length,
       saidasMes,
+      descartesMes,
+      ajustesMes,
     }
 
     const byTipo = {

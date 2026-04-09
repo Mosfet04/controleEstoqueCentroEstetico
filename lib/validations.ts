@@ -31,11 +31,21 @@ export type InsumoInput = z.infer<typeof insumoSchema>
 // Saída de Insumo
 // ---------------------------------------------------------------------------
 
-export const saidaSchema = z.object({
-  insumoId: z.string().cuid({ message: 'ID de insumo inválido' }),
-  quantidade: z.number().int().min(1, 'Quantidade deve ser pelo menos 1'),
-  observacao: z.string().max(500).optional(),
-})
+export const saidaSchema = z
+  .object({
+    insumoId: z.string().cuid({ message: 'ID de insumo inválido' }),
+    quantidade: z.number().int().min(1, 'Quantidade deve ser pelo menos 1'),
+    tipo: z.enum(['uso', 'descarte', 'ajuste']).default('uso'),
+    motivo: z.string().max(500).optional(),
+    observacao: z.string().max(500).optional(),
+  })
+  .refine(
+    (data) => data.tipo === 'uso' || (data.motivo !== undefined && data.motivo.trim().length > 0),
+    {
+      message: 'Motivo é obrigatório para descarte e ajuste de estoque',
+      path: ['motivo'],
+    }
+  )
 
 export type SaidaInput = z.infer<typeof saidaSchema>
 

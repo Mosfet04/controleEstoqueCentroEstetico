@@ -23,6 +23,8 @@ export async function GET(request: NextRequest) {
       insumoNome: s.insumo.nome,
       insumoLote: s.insumo.lote,
       quantidade: s.quantidade,
+      tipo: s.tipo,
+      motivo: s.motivo,
       responsavel: s.user.name,
       observacao: s.observacao,
       dataRetirada: s.dataRetirada,
@@ -51,7 +53,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { insumoId, quantidade, observacao } = parsed.data
+    const { insumoId, quantidade, tipo, motivo, observacao } = parsed.data
 
     // Atomic: verify stock and create saída in a single transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -78,6 +80,8 @@ export async function POST(request: NextRequest) {
           insumoId,
           userId: user.id,
           quantidade,
+          tipo: tipo ?? 'uso',
+          motivo: motivo ?? null,
           observacao: observacao ?? null,
           dataRetirada: new Date(),
         },
@@ -89,9 +93,9 @@ export async function POST(request: NextRequest) {
     })
 
     Sentry.addBreadcrumb({
-      message: `Saída registrada: ${result.insumo.nome} (${quantidade} unidades)`,
+      message: `Saída registrada: ${result.insumo.nome} (${quantidade} unidades) [${tipo ?? 'uso'}]`,
       category: 'saida',
-      data: { id: result.id, insumoId, userId: user.id, quantidade },
+      data: { id: result.id, insumoId, userId: user.id, quantidade, tipo },
     })
 
     return NextResponse.json(
@@ -101,6 +105,8 @@ export async function POST(request: NextRequest) {
         insumoNome: result.insumo.nome,
         insumoLote: result.insumo.lote,
         quantidade: result.quantidade,
+        tipo: result.tipo,
+        motivo: result.motivo,
         responsavel: result.user.name,
         observacao: result.observacao,
         dataRetirada: result.dataRetirada,

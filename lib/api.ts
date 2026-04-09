@@ -101,6 +101,8 @@ export interface SaidaApi {
   insumoNome: string
   insumoLote: string
   quantidade: number
+  tipo: 'uso' | 'descarte' | 'ajuste'
+  motivo?: string | null
   responsavel: string
   observacao?: string | null
   dataRetirada: string
@@ -109,8 +111,13 @@ export interface SaidaApi {
 
 export const saidasApi = {
   list: () => apiFetch<SaidaApi[]>('/api/saidas'),
-  create: (data: { insumoId: string; quantidade: number; observacao?: string }) =>
-    apiFetch<SaidaApi>('/api/saidas', { method: 'POST', body: JSON.stringify(data) }),
+  create: (data: {
+    insumoId: string
+    quantidade: number
+    tipo?: 'uso' | 'descarte' | 'ajuste'
+    motivo?: string
+    observacao?: string
+  }) => apiFetch<SaidaApi>('/api/saidas', { method: 'POST', body: JSON.stringify(data) }),
 }
 
 // ---------------------------------------------------------------------------
@@ -148,6 +155,8 @@ export interface DashboardApi {
     insumosCriticos: number
     insumosAtencao: number
     saidasMes: number
+    descartesMes: number
+    ajustesMes: number
   }
   byTipo: { injetavel: number; descartavel: number; peeling: number }
   byStatus: { bom: number; atencao: number; critico: number }
