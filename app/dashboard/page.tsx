@@ -107,13 +107,15 @@ function TipoBadge({ tipo }: { tipo: TipoInsumo }) {
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardApi | null>(null)
-  const { unidadeAtiva } = useUnidade()
+  const { unidadeAtiva, isGlobalView, isLoading: unidadeLoading } = useUnidade()
 
   useEffect(() => {
+    if (unidadeLoading) return
+    setData(null)
     dashboardApi.get()
       .then(setData)
       .catch(() => toast.error('Erro ao carregar métricas'))
-  }, [])
+  }, [unidadeAtiva, isGlobalView, unidadeLoading])
 
   if (!data) {
     return (

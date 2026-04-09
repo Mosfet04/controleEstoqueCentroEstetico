@@ -40,7 +40,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
-import { Plus, Users, Pencil, Trash2, Shield, User as UserIcon } from 'lucide-react'
+import { Plus, Users, Pencil, Trash2, Shield, User as UserIcon, UserX, RotateCcw } from 'lucide-react'
 import { usuariosApi, unidadesApi, UserApi, UnidadeApi, ApiError } from '@/lib/api'
 import { useAuth } from '@/contexts/auth-context'
 import { format } from 'date-fns'
@@ -73,6 +73,7 @@ export default function UsuariosPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserApi | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [reactivateId, setReactivateId] = useState<string | null>(null)
   const [formData, setFormData] = useState<UserFormData>(initialFormData)
 
   const loadUsers = async () => {
@@ -155,8 +156,12 @@ export default function UsuariosPage() {
       return
     }
     try {
-      await usuariosApi.delete(deleteId)
-      toast.success('Usuário removido com sucesso!')
+      const result = await usuariosApi.delete(deleteId)
+      if (result.deactivated) {
+        toast.success('Acesso do usuário revogado. O histórico de saídas foi preservado.')
+      } else {
+        toast.success('Usuário removido com sucesso!')
+      }
       setDeleteId(null)
       await loadUsers()
     } catch (err) {
@@ -164,6 +169,22 @@ export default function UsuariosPage() {
         toast.error(err.message)
       } else {
         toast.error('Erro ao remover usuário')
+      }
+    }
+  }
+
+  const handleReactivate = async () => {
+    if (!reactivateId) return
+    try {
+      await usuariosApi.reactivate(reactivateId)
+      toast.success('Acesso do usuário reativado com sucesso!')
+      setReactivateId(null)
+      await loadUsers()
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error(err.message)
+      } else {
+        toast.error('Erro ao reativar usuário')
       }
     }
   }
@@ -312,12 +333,22 @@ export default function UsuariosPage() {
                   <TableRow key={user.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                        <div className={`flex items-center justify-center w-8 h-8 rounded-full font-semibold text-sm ${
+                          user.ativo === false
+                            ? 'bg-muted text-muted-foreground'
+                            : 'bg-primary/10 text-primary'
+                        }`}>
                           {user.name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="font-medium">{user.name}</span>
+                        <span className={`font-medium ${user.ativo === false ? 'text-muted-foreground line-through' : ''}`}>{user.name}</span>
                         {user.id === currentUser?.id && (
                           <Badge variant="outline" className="text-xs">Você</Badge>
+                        )}
+                        {user.ativo === false && (
+                          <Badge variant="outline" className="text-xs bg-gray-100 text-gray-500 border-gray-300">
+                            <UserX className="w-3 h-3 mr-1" />
+                            Desativado
+                          </Badge>
                         )}
                       </div>
                     </TableCell>
@@ -351,17 +382,30 @@ export default function UsuariosPage() {
                     <TableCell>{format(new Date(user.createdAt), "dd/MM/yyyy", { locale: ptBR })}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)}>
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDeleteId(user.id)}
-                          disabled={user.id === currentUser?.id}
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
+                        {user.ativo === false ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setReactivateId(user.id)}
+                            title="Reativar acesso"
+                          >
+                            <RotateCcw className="w-4 h-4 text-green-600" />
+                          </Button>
+                        ) : (
+                          <>
+                            <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)}>
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setDeleteId(user.id)}
+                              disabled={user.id === currentUser?.id}
+                            >
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -372,19 +416,38 @@ export default function UsuariosPage() {
         </CardContent>
       </Card>
 
-      {/* Dialog de confirmação de exclusão */}
+      {/* Dialog de confirmação de exclusão/desativação */}
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogTitle>Revogar acesso do usuário</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.
+              Se o usuário possui registros de saídas, o acesso será <strong>desativado</strong> (histórico preservado).
+              Caso contrário, o usuário será <strong>excluído permanentemente</strong>.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Excluir
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog de confirmação de reativação */}
+      <AlertDialog open={!!reactivateId} onOpenChange={() => setReactivateId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reativar acesso do usuário</AlertDialogTitle>
+            <AlertDialogDescription>
+              O usuário voltará a ter acesso ao sistema normalmente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReactivate}>
+              Reativar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

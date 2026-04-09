@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { requireAuth, isUser, getUnidadeId, requireUnidadeAccess } from '@/lib/auth-helpers'
 import { insumoSchema } from '@/lib/validations'
 import { insumoWithStatus } from '@/lib/insumo-utils'
@@ -113,6 +114,15 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2003'
+    ) {
+      return NextResponse.json(
+        { error: 'Este insumo possui saídas registradas e não pode ser excluído.' },
+        { status: 409 }
+      )
+    }
     Sentry.captureException(error, { tags: { route: `DELETE /api/insumos/${id}` } })
     return NextResponse.json({ error: 'Erro ao excluir insumo' }, { status: 500 })
   }

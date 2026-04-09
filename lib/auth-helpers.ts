@@ -24,14 +24,19 @@ export async function requireAuth(
 
     const user = await prisma.user.findUnique({
       where: { firebaseUid: decoded.uid },
-      select: { id: true, email: true, name: true, role: true, firebaseUid: true },
+      select: { id: true, email: true, name: true, role: true, firebaseUid: true, ativo: true },
     })
 
     if (!user) {
       return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 403 })
     }
 
-    return user
+    if (!user.ativo) {
+      return NextResponse.json({ error: 'Usuário desativado' }, { status: 401 })
+    }
+
+    const { ativo: _ativo, ...authenticatedUser } = user
+    return authenticatedUser
   } catch {
     return NextResponse.json({ error: 'Token inválido ou expirado' }, { status: 401 })
   }

@@ -87,11 +87,27 @@ export async function DELETE(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
     }
 
-    // Remove from Firebase Auth
     const adminAuth = getAdminAuth()
-    await adminAuth.deleteUser(existing.firebaseUid)
 
-    // Remove from DB
+    // Check if user has any saída records — if so, soft-delete to preserve history
+    const hasSaidas = await prisma.saidaInsumo.count({ where: { userId: id } })
+    if (hasSaidas > 0) {
+      await Promise.all([
+        prisma.user.update({ where: { id }, data: { ativo: false } }),
+        adminAuth.updateUser(existing.firebaseUid, { disabled: true }),
+      ])
+
+      Sentry.addBreadcrumb({
+        message: `Usuário desativado: ${existing.email}`,
+        category: 'usuario',
+        data: { id, adminId: admin.id },
+      })
+
+      return NextResponse.json({ deactivated: true })
+    }
+
+    // No history — hard delete
+    await adminAuth.deleteUser(existing.firebaseUid)
     await prisma.user.delete({ where: { id } })
 
     Sentry.addBreadcrumb({
@@ -104,5 +120,36 @@ export async function DELETE(request: NextRequest, { params }: Params) {
   } catch (error) {
     Sentry.captureException(error, { tags: { route: `DELETE /api/usuarios/${id}` } })
     return NextResponse.json({ error: 'Erro ao excluir usuário' }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: NextRequest, { params }: Params) {
+  const admin = await requireAdmin(request)
+  if (!isUser(admin)) return admin
+
+  const { id } = await params
+
+  try {
+    const existing = await prisma.user.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+    }
+
+    const adminAuth = getAdminAuth()
+    await Promise.all([
+      prisma.user.update({ where: { id }, data: { ativo: true } }),
+      adminAuth.updateUser(existing.firebaseUid, { disabled: false }),
+    ])
+
+    Sentry.addBreadcrumb({
+      message: `Usuário reativado: ${existing.email}`,
+      category: 'usuario',
+      data: { id, adminId: admin.id },
+    })
+
+    return NextResponse.json({ reactivated: true })
+  } catch (error) {
+    Sentry.captureException(error, { tags: { route: `PATCH /api/usuarios/${id}` } })
+    return NextResponse.json({ error: 'Erro ao reativar usuário' }, { status: 500 })
   }
 }

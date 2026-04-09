@@ -169,6 +169,7 @@ export interface UserApi {
   email: string
   name: string
   role: 'admin' | 'clinico'
+  ativo: boolean
   createdAt: string
   unidades?: { id: string; nome: string }[]
 }
@@ -180,7 +181,9 @@ export const usuariosApi = {
   update: (id: string, data: { name?: string; email?: string; role?: string }) =>
     apiFetch<UserApi>(`/api/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
-    apiFetch<{ success: boolean }>(`/api/usuarios/${id}`, { method: 'DELETE' }),
+    apiFetch<{ success?: boolean; deactivated?: boolean }>(`/api/usuarios/${id}`, { method: 'DELETE' }),
+  reactivate: (id: string) =>
+    apiFetch<{ reactivated: boolean }>(`/api/usuarios/${id}`, { method: 'PATCH' }),
 }
 
 // ---------------------------------------------------------------------------
