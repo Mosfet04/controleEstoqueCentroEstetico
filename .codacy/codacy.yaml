@@ -1,5 +1,6 @@
-runtimes:
-    - dart@3.7.2
+tools:
+    - pmd@7.11.0
+.2
     - go@1.22.3
     - java@17.0.10
     - node@22.2.0

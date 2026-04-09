@@ -41,7 +41,10 @@ export default withSentryConfig(nextConfig, {
   project: process.env.SENTRY_PROJECT,
   // Suppress Sentry CLI output during builds
   silent: !process.env.CI,
-  // Upload source maps only in CI/production
+  // Only upload source maps when auth token is present (skips upload on Vercel if not configured)
+  sourcemaps: {
+    disable: !process.env.SENTRY_AUTH_TOKEN,
+  },
   widenClientFileUpload: true,
   hideSourceMaps: true,
   disableLogger: true,

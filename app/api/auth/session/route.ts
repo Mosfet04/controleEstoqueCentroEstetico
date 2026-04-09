@@ -53,7 +53,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Token expirado ou inválido' }, { status: 401 })
     }
 
-    console.error('[auth/session] POST error:', message)
+    // Log the full error so it appears in Vercel function logs
+    console.error('[auth/session] POST error:', error instanceof Error ? error.stack : message)
     return NextResponse.json({ error: 'Erro interno de autenticação' }, { status: 500 })
   }
 }
