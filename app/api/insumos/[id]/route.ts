@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
 import { prisma } from '@/lib/prisma'
-import { requireAuth, isUser, getUnidadeId } from '@/lib/auth-helpers'
+import { requireAuth, isUser, getUnidadeId, requireUnidadeAccess } from '@/lib/auth-helpers'
 import { insumoSchema } from '@/lib/validations'
 import { insumoWithStatus } from '@/lib/insumo-utils'
 
@@ -11,7 +11,10 @@ export async function GET(request: NextRequest, { params }: Params) {
   const user = await requireAuth(request)
   if (!isUser(user)) return user
 
-  const unidadeId = getUnidadeId(request)
+  const rawUnidadeId = getUnidadeId(request)
+  if (rawUnidadeId instanceof NextResponse) return rawUnidadeId
+
+  const unidadeId = await requireUnidadeAccess(user, rawUnidadeId)
   if (unidadeId instanceof NextResponse) return unidadeId
 
   const { id } = await params
@@ -34,7 +37,10 @@ export async function PUT(request: NextRequest, { params }: Params) {
   const user = await requireAuth(request)
   if (!isUser(user)) return user
 
-  const unidadeId = getUnidadeId(request)
+  const rawUnidadeId = getUnidadeId(request)
+  if (rawUnidadeId instanceof NextResponse) return rawUnidadeId
+
+  const unidadeId = await requireUnidadeAccess(user, rawUnidadeId)
   if (unidadeId instanceof NextResponse) return unidadeId
 
   const { id } = await params
@@ -83,7 +89,10 @@ export async function DELETE(request: NextRequest, { params }: Params) {
   const user = await requireAuth(request)
   if (!isUser(user)) return user
 
-  const unidadeId = getUnidadeId(request)
+  const rawUnidadeId = getUnidadeId(request)
+  if (rawUnidadeId instanceof NextResponse) return rawUnidadeId
+
+  const unidadeId = await requireUnidadeAccess(user, rawUnidadeId)
   if (unidadeId instanceof NextResponse) return unidadeId
 
   const { id } = await params

@@ -76,3 +76,26 @@ export function getUnidadeId(
 
   return unidadeId
 }
+
+/**
+ * Verifies that the authenticated user has access to the requested unit.
+ * Admins always pass. Clinicos must be members of the unit.
+ * Returns the unidadeId string or a 403 NextResponse.
+ */
+export async function requireUnidadeAccess(
+  user: AuthenticatedUser,
+  unidadeId: string
+): Promise<string | NextResponse> {
+  if (user.role === UserRole.admin) return unidadeId
+
+  const membership = await prisma.unidade.findFirst({
+    where: { id: unidadeId, usuarios: { some: { id: user.id } } },
+    select: { id: true },
+  })
+
+  if (!membership) {
+    return NextResponse.json({ error: 'Acesso negado a esta unidade' }, { status: 403 })
+  }
+
+  return unidadeId
+}

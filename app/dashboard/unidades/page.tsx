@@ -36,9 +36,11 @@ import { Plus, Pencil, Trash2, Building2 } from 'lucide-react'
 import { unidadesApi, UnidadeApi, ApiError } from '@/lib/api'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/auth-context'
+import { useUnidade } from '@/contexts/unidade-context'
 
 export default function UnidadesPage() {
   const { user } = useAuth()
+  const { reloadUnidades } = useUnidade()
   const [unidades, setUnidades] = useState<UnidadeApi[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -105,6 +107,7 @@ export default function UnidadesPage() {
 
       setDialogOpen(false)
       loadUnidades()
+      reloadUnidades()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Erro ao salvar unidade')
     } finally {
@@ -119,6 +122,7 @@ export default function UnidadesPage() {
       toast.success('Unidade desativada')
       setDeleteTarget(null)
       loadUnidades()
+      reloadUnidades()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Erro ao desativar unidade')
     }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
-import { requireAuth, isUser, getUnidadeId } from '@/lib/auth-helpers'
+import { requireAuth, isUser, getUnidadeId, requireUnidadeAccess } from '@/lib/auth-helpers'
 import { getDashboardData } from '@/lib/dashboard-data'
 import { generateReport } from '@/lib/report-generator'
 
@@ -8,7 +8,10 @@ export async function GET(request: NextRequest) {
   const user = await requireAuth(request)
   if (!isUser(user)) return user
 
-  const unidadeId = getUnidadeId(request)
+  const rawUnidadeId = getUnidadeId(request)
+  if (rawUnidadeId instanceof NextResponse) return rawUnidadeId
+
+  const unidadeId = await requireUnidadeAccess(user, rawUnidadeId)
   if (unidadeId instanceof NextResponse) return unidadeId
 
   try {
