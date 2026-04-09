@@ -2,11 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { signInWithEmailAndPassword, AuthError } from 'firebase/auth'
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail, AuthError } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FieldGroup, Field, FieldLabel, FieldError } from '@/components/ui/field'
+import { Separator } from '@/components/ui/separator'
 import { Sparkles, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { getFirebaseAuth } from '@/lib/firebase'
 import { toast } from 'sonner'
@@ -23,6 +24,11 @@ function getFirebaseErrorMessage(code: string): string {
       return 'Conta desativada. Contate o administrador'
     case 'auth/network-request-failed':
       return 'Erro de conexão. Verifique sua internet'
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return 'Login com Google cancelado'
+    case 'auth/popup-blocked':
+      return 'Popup bloqueado pelo navegador. Permita popups para este site'
     default:
       return 'Erro ao entrar. Tente novamente'
   }
@@ -47,6 +53,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
 
   const validateForm = () => {
@@ -93,6 +100,55 @@ export default function LoginPage() {
     }
   }
 
+  const handleGoogleSignIn = async () => {
+    setIsGoogleLoading(true)
+    try {
+      const provider = new GoogleAuthProvider()
+      const credential = await signInWithPopup(getFirebaseAuth(), provider)
+      const idToken = await credential.user.getIdToken()
+      const appUser = await exchangeFirebaseToken(idToken)
+      toast.success(`Bem-vindo(a), ${appUser.name}!`)
+      router.push('/dashboard')
+    } catch (err) {
+      const message = err instanceof Error
+        ? err.message
+        : getFirebaseErrorMessage((err as AuthError)?.code ?? '')
+      // Não mostra erro se o usuário apenas fechou o popup
+      const code = (err as AuthError)?.code ?? ''
+      if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
+        toast.error(message)
+      }
+    } finally {
+      setIsGoogleLoading(false)
+    }
+  }
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setErrors((prev) => ({ ...prev, email: 'Digite seu e-mail para redefinir a senha' }))
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErrors((prev) => ({ ...prev, email: 'E-mail inválido' }))
+      return
+    }
+
+    try {
+      await sendPasswordResetEmail(getFirebaseAuth(), email)
+      toast.success('E-mail de redefinição enviado! Verifique sua caixa de entrada.')
+    } catch (err) {
+      const code = (err as AuthError)?.code ?? ''
+      // Não revelamos se o e-mail existe ou não (segurança)
+      if (code === 'auth/user-not-found') {
+        toast.success('Se este e-mail estiver cadastrado, você receberá as instruções.')
+      } else {
+        toast.error(getFirebaseErrorMessage(code))
+      }
+    }
+  }
+
+  const anyLoading = isLoading || isGoogleLoading
+
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-secondary/30 to-background p-4">
       <div className="w-full max-w-md">
@@ -121,13 +177,23 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className={errors.email ? 'border-destructive' : ''}
-                    disabled={isLoading}
+                    disabled={anyLoading}
                   />
                   {errors.email && <FieldError>{errors.email}</FieldError>}
                 </Field>
 
                 <Field>
-                  <FieldLabel htmlFor="password">Senha</FieldLabel>
+                  <div className="flex items-center justify-between">
+                    <FieldLabel htmlFor="password">Senha</FieldLabel>
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      disabled={anyLoading}
+                      className="text-xs text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
+                    >
+                      Esqueceu a senha?
+                    </button>
+                  </div>
                   <div className="relative">
                     <Input
                       id="password"
@@ -136,7 +202,7 @@ export default function LoginPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className={errors.password ? 'border-destructive pr-10' : 'pr-10'}
-                      disabled={isLoading}
+                      disabled={anyLoading}
                     />
                     <button
                       type="button"
@@ -149,7 +215,7 @@ export default function LoginPage() {
                   {errors.password && <FieldError>{errors.password}</FieldError>}
                 </Field>
 
-                <Button type="submit" className="w-full mt-2" disabled={isLoading}>
+                <Button type="submit" className="w-full mt-2" disabled={anyLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -161,6 +227,32 @@ export default function LoginPage() {
                 </Button>
               </FieldGroup>
             </form>
+
+            <div className="flex items-center gap-3 my-4">
+              <Separator className="flex-1" />
+              <span className="text-xs text-muted-foreground">ou</span>
+              <Separator className="flex-1" />
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleGoogleSignIn}
+              disabled={anyLoading}
+            >
+              {isGoogleLoading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                </svg>
+              )}
+              Entrar com Google
+            </Button>
           </CardContent>
         </Card>
       </div>
