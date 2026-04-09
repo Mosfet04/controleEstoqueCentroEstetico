@@ -11,16 +11,25 @@ import {
   Clock,
   CheckCircle2,
 } from 'lucide-react'
-import {
-  getDashboardMetrics,
-  getInsumosByTipo,
-  getInsumosByStatus,
-  getInsumosVencendo,
-  getInsumosCriticos,
-} from '@/lib/store'
-import { TIPO_LABELS, STATUS_LABELS, Insumo, TipoInsumo, StatusEstoque } from '@/lib/types'
+import { dashboardApi, DashboardApi } from '@/lib/api'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { toast } from 'sonner'
+
+type StatusEstoque = 'bom' | 'atencao' | 'critico'
+type TipoInsumo = 'injetavel' | 'descartavel' | 'peeling'
+
+const TIPO_LABELS: Record<TipoInsumo, string> = {
+  injetavel: 'Injetável',
+  descartavel: 'Descartável',
+  peeling: 'Peeling',
+}
+
+const STATUS_LABELS: Record<StatusEstoque, string> = {
+  bom: 'Bom',
+  atencao: 'Atenção',
+  critico: 'Crítico',
+}
 
 function MetricCard({
   title,
@@ -94,27 +103,23 @@ function TipoBadge({ tipo }: { tipo: TipoInsumo }) {
 }
 
 export default function DashboardPage() {
-  const [metrics, setMetrics] = useState<ReturnType<typeof getDashboardMetrics> | null>(null)
-  const [byTipo, setByTipo] = useState<Record<TipoInsumo, number> | null>(null)
-  const [byStatus, setByStatus] = useState<Record<StatusEstoque, number> | null>(null)
-  const [vencendo, setVencendo] = useState<Insumo[]>([])
-  const [criticos, setCriticos] = useState<Insumo[]>([])
+  const [data, setData] = useState<DashboardApi | null>(null)
 
   useEffect(() => {
-    setMetrics(getDashboardMetrics())
-    setByTipo(getInsumosByTipo())
-    setByStatus(getInsumosByStatus())
-    setVencendo(getInsumosVencendo(30))
-    setCriticos(getInsumosCriticos())
+    dashboardApi.get()
+      .then(setData)
+      .catch(() => toast.error('Erro ao carregar métricas'))
   }, [])
 
-  if (!metrics || !byTipo || !byStatus) {
+  if (!data) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
+
+  const { metrics, byTipo, byStatus, vencendo30, criticos } = data
 
   return (
     <div className="space-y-6">
@@ -150,7 +155,7 @@ export default function DashboardPage() {
         <MetricCard
           title="Movimentação Mês"
           value={metrics.saidasMes}
-          description={`${metrics.entradasMes} entradas`}
+          description="Saídas registradas"
           icon={CheckCircle2}
           trend="neutral"
           trendValue="Saídas"
@@ -215,24 +220,23 @@ export default function DashboardPage() {
             <CardDescription>Insumos com vencimento nos próximos 30 dias</CardDescription>
           </CardHeader>
           <CardContent>
-            {vencendo.length === 0 ? (
+            {vencendo30.length === 0 ? (
               <p className="text-muted-foreground text-sm">Nenhum insumo vencendo em breve.</p>
             ) : (
               <div className="space-y-3">
-                {vencendo.slice(0, 5).map((insumo) => {
-                  const diasRestantes = differenceInDays(insumo.dataVencimento, new Date())
+                {vencendo30.slice(0, 5).map((insumo) => {
+                  const diasRestantes = differenceInDays(new Date(insumo.dataVencimento), new Date())
                   return (
                     <div key={insumo.id} className="flex items-center justify-between p-3 rounded-lg bg-yellow-50 border border-yellow-200">
                       <div className="flex flex-col">
                         <span className="font-medium text-foreground">{insumo.nome}</span>
-                        <span className="text-xs text-muted-foreground">Lote: {insumo.lote}</span>
                       </div>
                       <div className="text-right">
                         <span className="text-sm font-semibold text-yellow-700">
                           {diasRestantes} {diasRestantes === 1 ? 'dia' : 'dias'}
                         </span>
                         <p className="text-xs text-muted-foreground">
-                          {format(insumo.dataVencimento, 'dd/MM/yyyy', { locale: ptBR })}
+                          {format(new Date(insumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}
                         </p>
                       </div>
                     </div>
@@ -265,7 +269,6 @@ export default function DashboardPage() {
                   >
                     <div className="flex flex-col">
                       <span className="font-medium text-foreground">{insumo.nome}</span>
-                      <span className="text-xs text-muted-foreground">{insumo.fornecedor}</span>
                     </div>
                     <div className="text-right">
                       <span
@@ -287,3 +290,4 @@ export default function DashboardPage() {
     </div>
   )
 }
+

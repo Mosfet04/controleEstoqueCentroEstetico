@@ -30,8 +30,8 @@ import {
 } from '@/components/ui/table'
 import { FieldGroup, Field, FieldLabel, FieldError } from '@/components/ui/field'
 import { Plus, PackageMinus, Search } from 'lucide-react'
-import { getInsumos, getSaidas, createSaida } from '@/lib/store'
-import { Insumo, SaidaInsumo, User } from '@/lib/types'
+import { saidasApi, insumosApi, SaidaApi, InsumoApi, ApiError } from '@/lib/api'
+import { useAuth } from '@/contexts/auth-context'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
@@ -49,25 +49,31 @@ const initialFormData: SaidaFormData = {
 }
 
 export default function SaidasPage() {
-  const [saidas, setSaidas] = useState<SaidaInsumo[]>([])
-  const [insumos, setInsumos] = useState<Insumo[]>([])
+  const { user } = useAuth()
+  const [saidas, setSaidas] = useState<SaidaApi[]>([])
+  const [insumos, setInsumos] = useState<InsumoApi[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [formData, setFormData] = useState<SaidaFormData>(initialFormData)
-  const [user, setUser] = useState<User | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const loadData = () => {
-    setSaidas(getSaidas())
-    setInsumos(getInsumos().filter((i) => i.quantidade > 0))
+  const loadData = async () => {
+    try {
+      const [saidasData, insumosData] = await Promise.all([
+        saidasApi.list(),
+        insumosApi.list(),
+      ])
+      setSaidas(saidasData)
+      setInsumos(insumosData.filter((i) => i.quantidade > 0))
+    } catch (err) {
+      if (err instanceof ApiError && err.status !== 401) {
+        toast.error('Erro ao carregar dados')
+      }
+    }
   }
 
   useEffect(() => {
     loadData()
-    const storedUser = sessionStorage.getItem('user')
-    if (storedUser) {
-      setUser(JSON.parse(storedUser))
-    }
   }, [])
 
   const filteredSaidas = saidas.filter(
@@ -78,7 +84,7 @@ export default function SaidasPage() {
 
   const selectedInsumo = insumos.find((i) => i.id === formData.insumoId)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
@@ -87,32 +93,31 @@ export default function SaidasPage() {
       return
     }
 
-    if (!selectedInsumo) {
-      setError('Insumo não encontrado')
-      return
-    }
-
-    if (formData.quantidade > selectedInsumo.quantidade) {
+    if (selectedInsumo && formData.quantidade > selectedInsumo.quantidade) {
       setError(`Quantidade indisponível. Estoque atual: ${selectedInsumo.quantidade}`)
       return
     }
 
-    const result = createSaida({
-      insumoId: formData.insumoId,
-      insumoNome: selectedInsumo.nome,
-      quantidade: formData.quantidade,
-      responsavel: user?.name || 'Usuário',
-      observacao: formData.observacao || undefined,
-      dataRetirada: new Date(),
-    })
-
-    if (result) {
+    try {
+      await saidasApi.create({
+        insumoId: formData.insumoId,
+        quantidade: formData.quantidade,
+        observacao: formData.observacao || undefined,
+      })
       toast.success('Saída registrada com sucesso!')
       setIsDialogOpen(false)
       setFormData(initialFormData)
-      loadData()
-    } else {
-      setError('Erro ao registrar saída')
+      await loadData()
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 409) {
+          setError(err.message)
+        } else {
+          toast.error(err.message)
+        }
+      } else {
+        toast.error('Erro inesperado ao registrar saída')
+      }
     }
   }
 
@@ -262,7 +267,7 @@ export default function SaidasPage() {
                         </span>
                       </TableCell>
                       <TableCell>{saida.responsavel}</TableCell>
-                      <TableCell>{format(saida.dataRetirada, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</TableCell>
+                      <TableCell>{format(new Date(saida.dataRetirada), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</TableCell>
                       <TableCell className="text-muted-foreground">{saida.observacao || '-'}</TableCell>
                     </TableRow>
                   ))

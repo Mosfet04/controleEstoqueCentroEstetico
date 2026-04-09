@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  admin
+  clinico
+}
+
+enum TipoInsumo {
+  injetavel
+  descartavel
+  peeling
+}
+
+model User {
+  id          String    @id @default(cuid())
+  firebaseUid String    @unique
+  email       String    @unique
+  name        String
+  role        UserRole  @default(clinico)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  saidas      SaidaInsumo[]
+
+  @@index([email])
+  @@index([firebaseUid])
+}
+
+model Insumo {
+  id               String     @id @default(cuid())
+  nome             String
+  lote             String
+  tipo             TipoInsumo
+  fornecedor       String
+  quantidade       Int
+  quantidadeMinima Int
+  dataEntrada      DateTime
+  dataVencimento   DateTime
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  saidas           SaidaInsumo[]
+
+  @@index([tipo])
+  @@index([dataVencimento])
+}
+
+model SaidaInsumo {
+  id          String   @id @default(cuid())
+  insumoId    String
+  insumo      Insumo   @relation(fields: [insumoId], references: [id], onDelete: Restrict)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  quantidade  Int
+  observacao  String?
+  dataRetirada DateTime @default(now())
+  createdAt   DateTime  @default(now())
+
+  @@index([insumoId])
+  @@index([userId])
+  @@index([dataRetirada])
+}

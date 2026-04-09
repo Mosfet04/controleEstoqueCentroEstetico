@@ -2,13 +2,44 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { signInWithEmailAndPassword, AuthError } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FieldGroup, Field, FieldLabel, FieldError } from '@/components/ui/field'
 import { Sparkles, Eye, EyeOff, Loader2 } from 'lucide-react'
-import { authenticateUser } from '@/lib/store'
+import { getFirebaseAuth } from '@/lib/firebase'
 import { toast } from 'sonner'
+
+function getFirebaseErrorMessage(code: string): string {
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+      return 'E-mail ou senha incorretos'
+    case 'auth/too-many-requests':
+      return 'Muitas tentativas. Aguarde alguns minutos e tente novamente'
+    case 'auth/user-disabled':
+      return 'Conta desativada. Contate o administrador'
+    case 'auth/network-request-failed':
+      return 'Erro de conexão. Verifique sua internet'
+    default:
+      return 'Erro ao entrar. Tente novamente'
+  }
+}
+
+async function exchangeFirebaseToken(idToken: string): Promise<{ name: string }> {
+  const res = await fetch('/api/auth/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken }),
+  })
+  if (!res.ok) {
+    const data = await res.json()
+    throw new Error(data?.error ?? 'Erro ao iniciar sessão')
+  }
+  return res.json()
+}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -43,23 +74,23 @@ export default function LoginPage() {
     if (!validateForm()) return
 
     setIsLoading(true)
+    setErrors({})
 
-    // Simula delay de autenticação
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    const user = authenticateUser(email, password)
-
-    if (user) {
-      // Armazena dados do usuário em sessionStorage
-      sessionStorage.setItem('user', JSON.stringify(user))
-      toast.success(`Bem-vindo(a), ${user.name}!`)
+    try {
+      const credential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password)
+      const idToken = await credential.user.getIdToken()
+      const appUser = await exchangeFirebaseToken(idToken)
+      toast.success(`Bem-vindo(a), ${appUser.name}!`)
       router.push('/dashboard')
-    } else {
-      toast.error('E-mail ou senha incorretos')
-      setErrors({ password: 'E-mail ou senha incorretos' })
+    } catch (err) {
+      const message = err instanceof Error
+        ? err.message
+        : getFirebaseErrorMessage((err as AuthError)?.code ?? '')
+      toast.error(message)
+      setErrors({ password: message })
+    } finally {
+      setIsLoading(false)
     }
-
-    setIsLoading(false)
   }
 
   return (
@@ -130,24 +161,6 @@ export default function LoginPage() {
                 </Button>
               </FieldGroup>
             </form>
-
-            <div className="mt-6 pt-6 border-t border-border">
-              <p className="text-xs text-muted-foreground text-center mb-3">Credenciais de demonstração:</p>
-              <div className="grid gap-2 text-xs">
-                <div className="flex justify-between items-center p-2 rounded-lg bg-secondary/50">
-                  <span className="text-muted-foreground">Admin:</span>
-                  <code className="text-foreground">admin@stockbeauty.com</code>
-                </div>
-                <div className="flex justify-between items-center p-2 rounded-lg bg-secondary/50">
-                  <span className="text-muted-foreground">Clínico:</span>
-                  <code className="text-foreground">clinico@stockbeauty.com</code>
-                </div>
-                <div className="flex justify-between items-center p-2 rounded-lg bg-secondary/50">
-                  <span className="text-muted-foreground">Senha:</span>
-                  <code className="text-foreground">123456</code>
-                </div>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

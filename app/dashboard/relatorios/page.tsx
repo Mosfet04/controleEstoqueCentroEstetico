@@ -4,18 +4,26 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
-import {
-  getDashboardMetrics,
-  getInsumosByTipo,
-  getInsumosByStatus,
-  getInsumosVencendo,
-  getInsumosCriticos,
-  getTopConsumo,
-} from '@/lib/store'
-import { TIPO_LABELS, STATUS_LABELS, TipoInsumo, StatusEstoque, Insumo } from '@/lib/types'
+import { dashboardApi, DashboardApi, ApiError } from '@/lib/api'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { AlertTriangle, Clock, TrendingUp, Package } from 'lucide-react'
+import { toast } from 'sonner'
+
+type TipoInsumo = 'injetavel' | 'descartavel' | 'peeling'
+type StatusEstoque = 'bom' | 'atencao' | 'critico'
+
+const TIPO_LABELS: Record<TipoInsumo, string> = {
+  injetavel: 'Injetável',
+  descartavel: 'Descartável',
+  peeling: 'Peeling',
+}
+
+const STATUS_LABELS: Record<StatusEstoque, string> = {
+  bom: 'Bom',
+  atencao: 'Atenção',
+  critico: 'Crítico',
+}
 
 const COLORS = {
   primary: '#7c3aed',
@@ -40,29 +48,27 @@ const TIPO_COLORS: Record<TipoInsumo, string> = {
 }
 
 export default function RelatoriosPage() {
-  const [metrics, setMetrics] = useState<ReturnType<typeof getDashboardMetrics> | null>(null)
-  const [byTipo, setByTipo] = useState<Record<TipoInsumo, number> | null>(null)
-  const [byStatus, setByStatus] = useState<Record<StatusEstoque, number> | null>(null)
-  const [vencendo, setVencendo] = useState<Insumo[]>([])
-  const [criticos, setCriticos] = useState<Insumo[]>([])
-  const [topConsumo, setTopConsumo] = useState<{ nome: string; total: number }[]>([])
+  const [data, setData] = useState<DashboardApi | null>(null)
 
   useEffect(() => {
-    setMetrics(getDashboardMetrics())
-    setByTipo(getInsumosByTipo())
-    setByStatus(getInsumosByStatus())
-    setVencendo(getInsumosVencendo(60))
-    setCriticos(getInsumosCriticos())
-    setTopConsumo(getTopConsumo(5))
+    dashboardApi.get()
+      .then(setData)
+      .catch((err) => {
+        if (err instanceof ApiError && err.status !== 401) {
+          toast.error('Erro ao carregar relatórios')
+        }
+      })
   }, [])
 
-  if (!metrics || !byTipo || !byStatus) {
+  if (!data) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
+
+  const { metrics, byTipo, byStatus, topConsumo, vencendo60: vencendo, criticos } = data
 
   const tipoData = (Object.keys(byTipo) as TipoInsumo[]).map((tipo) => ({
     name: TIPO_LABELS[tipo],
@@ -248,19 +254,18 @@ export default function RelatoriosPage() {
             ) : (
               <div className="space-y-3">
                 {vencendo.map((insumo) => {
-                  const dias = differenceInDays(insumo.dataVencimento, new Date())
+                  const dias = differenceInDays(new Date(insumo.dataVencimento), new Date())
                   return (
                     <div key={insumo.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                       <div>
                         <p className="font-medium text-sm">{insumo.nome}</p>
-                        <p className="text-xs text-muted-foreground">Lote: {insumo.lote}</p>
                       </div>
                       <div className="text-right">
                         <Badge variant={dias <= 15 ? 'destructive' : 'secondary'}>
                           {dias} {dias === 1 ? 'dia' : 'dias'}
                         </Badge>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {format(insumo.dataVencimento, 'dd/MM/yyyy', { locale: ptBR })}
+                          {format(new Date(insumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}
                         </p>
                       </div>
                     </div>
@@ -289,7 +294,6 @@ export default function RelatoriosPage() {
                   <div key={insumo.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                     <div>
                       <p className="font-medium text-sm">{insumo.nome}</p>
-                      <p className="text-xs text-muted-foreground">{insumo.fornecedor}</p>
                     </div>
                     <div className="text-right">
                       <Badge variant={insumo.status === 'critico' ? 'destructive' : 'secondary'}>

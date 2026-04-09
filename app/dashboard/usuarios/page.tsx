@@ -41,60 +41,66 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Plus, Users, Pencil, Trash2, Shield, User as UserIcon } from 'lucide-react'
-import { getUsers, createUser, updateUser, deleteUser } from '@/lib/store'
-import { User, UserRole } from '@/lib/types'
+import { usuariosApi, UserApi, ApiError } from '@/lib/api'
+import { useAuth } from '@/contexts/auth-context'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
+
+type UserRole = 'admin' | 'clinico'
 
 interface UserFormData {
   name: string
   email: string
   role: UserRole
+  password: string
 }
 
 const initialFormData: UserFormData = {
   name: '',
   email: '',
   role: 'clinico',
+  password: '',
 }
 
 export default function UsuariosPage() {
   const router = useRouter()
-  const [users, setUsers] = useState<User[]>([])
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const { user: currentUser, isLoading } = useAuth()
+  const [users, setUsers] = useState<UserApi[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [editingUser, setEditingUser] = useState<UserApi | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [formData, setFormData] = useState<UserFormData>(initialFormData)
 
-  const loadUsers = () => {
-    setUsers(getUsers())
+  const loadUsers = async () => {
+    try {
+      const data = await usuariosApi.list()
+      setUsers(data)
+    } catch (err) {
+      if (err instanceof ApiError && err.status !== 401) {
+        toast.error('Erro ao carregar usuários')
+      }
+    }
   }
 
   useEffect(() => {
-    const storedUser = sessionStorage.getItem('user')
-    if (storedUser) {
-      const user = JSON.parse(storedUser) as User
-      setCurrentUser(user)
-      if (user.role !== 'admin') {
+    if (!isLoading && currentUser) {
+      if (currentUser.role !== 'admin') {
         router.push('/dashboard')
         return
       }
-    } else {
-      router.push('/')
-      return
+      loadUsers()
     }
-    loadUsers()
-  }, [router])
+  }, [isLoading, currentUser, router])
 
-  const handleOpenDialog = (user?: User) => {
+  const handleOpenDialog = (user?: UserApi) => {
     if (user) {
       setEditingUser(user)
       setFormData({
         name: user.name,
         email: user.email,
         role: user.role,
+        password: '',
       })
     } else {
       setEditingUser(null)
@@ -103,44 +109,59 @@ export default function UsuariosPage() {
     setIsDialogOpen(true)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (editingUser) {
-      updateUser(editingUser.id, {
-        name: formData.name,
-        email: formData.email,
-        role: formData.role,
-      })
-      toast.success('Usuário atualizado com sucesso!')
-    } else {
-      createUser({
-        name: formData.name,
-        email: formData.email,
-        role: formData.role,
-      })
-      toast.success('Usuário criado com sucesso!')
+    try {
+      if (editingUser) {
+        await usuariosApi.update(editingUser.id, {
+          name: formData.name,
+          email: formData.email,
+          role: formData.role,
+        })
+        toast.success('Usuário atualizado com sucesso!')
+      } else {
+        await usuariosApi.create({
+          name: formData.name,
+          email: formData.email,
+          role: formData.role,
+          password: formData.password,
+        })
+        toast.success('Usuário criado com sucesso!')
+      }
+      setIsDialogOpen(false)
+      await loadUsers()
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error(err.message)
+      } else {
+        toast.error('Erro inesperado ao salvar usuário')
+      }
     }
-
-    setIsDialogOpen(false)
-    loadUsers()
   }
 
-  const handleDelete = () => {
-    if (deleteId) {
-      if (deleteId === currentUser?.id) {
-        toast.error('Você não pode excluir seu próprio usuário!')
-        setDeleteId(null)
-        return
-      }
-      deleteUser(deleteId)
+  const handleDelete = async () => {
+    if (!deleteId) return
+    if (deleteId === currentUser?.id) {
+      toast.error('Você não pode excluir seu próprio usuário!')
+      setDeleteId(null)
+      return
+    }
+    try {
+      await usuariosApi.delete(deleteId)
       toast.success('Usuário removido com sucesso!')
       setDeleteId(null)
-      loadUsers()
+      await loadUsers()
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error(err.message)
+      } else {
+        toast.error('Erro ao remover usuário')
+      }
     }
   }
 
-  if (!currentUser || currentUser.role !== 'admin') {
+  if (isLoading || !currentUser || currentUser.role !== 'admin') {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -204,9 +225,17 @@ export default function UsuariosPage() {
                 </Field>
 
                 {!editingUser && (
-                  <div className="p-3 rounded-lg bg-secondary/50 text-sm text-muted-foreground">
-                    A senha padrão será: <code className="font-mono bg-background px-1 rounded">123456</code>
-                  </div>
+                  <Field>
+                    <FieldLabel>Senha temporária</FieldLabel>
+                    <Input
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="Mínimo 8 caracteres"
+                      required
+                      minLength={8}
+                    />
+                  </Field>
                 )}
 
                 <div className="flex gap-3 pt-4">
@@ -274,7 +303,7 @@ export default function UsuariosPage() {
                         )}
                       </Badge>
                     </TableCell>
-                    <TableCell>{format(user.createdAt, "dd/MM/yyyy", { locale: ptBR })}</TableCell>
+                    <TableCell>{format(new Date(user.createdAt), "dd/MM/yyyy", { locale: ptBR })}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(user)}>

@@ -16,7 +16,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
-import { User } from '@/lib/types'
+import { useAuth } from '@/contexts/auth-context'
 
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -29,18 +29,12 @@ const adminItems = [{ href: '/dashboard/usuarios', label: 'Usuários', icon: Use
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
+  const { user, signOut } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null)
 
-  useEffect(() => {
-    const storedUser = sessionStorage.getItem('user')
-    if (storedUser) {
-      setUser(JSON.parse(storedUser))
-    }
-  }, [])
+  const router = useRouter()
 
   useEffect(() => {
     setNavigatingTo(null)
@@ -56,8 +50,7 @@ export function AppSidebar() {
   }
 
   const handleLogout = () => {
-    sessionStorage.removeItem('user')
-    router.push('/')
+    signOut()
   }
 
   const allMenuItems = user?.role === 'admin' ? [...menuItems, ...adminItems] : menuItems

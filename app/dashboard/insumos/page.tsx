@@ -40,8 +40,22 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Plus, Search, Pencil, Trash2 } from 'lucide-react'
-import { getInsumos, createInsumo, updateInsumo, deleteInsumo } from '@/lib/store'
-import { Insumo, TipoInsumo, StatusEstoque, TIPO_LABELS, STATUS_LABELS } from '@/lib/types'
+import { insumosApi, InsumoApi, ApiError } from '@/lib/api'
+
+type TipoInsumo = 'injetavel' | 'descartavel' | 'peeling'
+type StatusEstoque = 'bom' | 'atencao' | 'critico'
+
+const TIPO_LABELS: Record<TipoInsumo, string> = {
+  injetavel: 'Injetável',
+  descartavel: 'Descartável',
+  peeling: 'Peeling',
+}
+
+const STATUS_LABELS: Record<StatusEstoque, string> = {
+  bom: 'Bom',
+  atencao: 'Atenção',
+  critico: 'Crítico',
+}
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
@@ -87,17 +101,24 @@ const initialFormData: InsumoFormData = {
 }
 
 export default function InsumosPage() {
-  const [insumos, setInsumos] = useState<Insumo[]>([])
+  const [insumos, setInsumos] = useState<InsumoApi[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [filterTipo, setFilterTipo] = useState<TipoInsumo | 'all'>('all')
   const [filterStatus, setFilterStatus] = useState<StatusEstoque | 'all'>('all')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingInsumo, setEditingInsumo] = useState<Insumo | null>(null)
+  const [editingInsumo, setEditingInsumo] = useState<InsumoApi | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [formData, setFormData] = useState<InsumoFormData>(initialFormData)
 
-  const loadInsumos = () => {
-    setInsumos(getInsumos())
+  const loadInsumos = async () => {
+    try {
+      const data = await insumosApi.list()
+      setInsumos(data)
+    } catch (err) {
+      if (err instanceof ApiError && err.status !== 401) {
+        toast.error('Erro ao carregar insumos')
+      }
+    }
   }
 
   useEffect(() => {
@@ -114,7 +135,7 @@ export default function InsumosPage() {
     return matchesSearch && matchesTipo && matchesStatus
   })
 
-  const handleOpenDialog = (insumo?: Insumo) => {
+  const handleOpenDialog = (insumo?: InsumoApi) => {
     if (insumo) {
       setEditingInsumo(insumo)
       setFormData({
@@ -124,8 +145,8 @@ export default function InsumosPage() {
         fornecedor: insumo.fornecedor,
         quantidade: insumo.quantidade,
         quantidadeMinima: insumo.quantidadeMinima,
-        dataEntrada: format(insumo.dataEntrada, 'yyyy-MM-dd'),
-        dataVencimento: format(insumo.dataVencimento, 'yyyy-MM-dd'),
+        dataEntrada: format(new Date(insumo.dataEntrada), 'yyyy-MM-dd'),
+        dataVencimento: format(new Date(insumo.dataVencimento), 'yyyy-MM-dd'),
       })
     } else {
       setEditingInsumo(null)
@@ -134,38 +155,52 @@ export default function InsumosPage() {
     setIsDialogOpen(true)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    const data = {
+    const payload = {
       nome: formData.nome,
       lote: formData.lote,
       tipo: formData.tipo,
       fornecedor: formData.fornecedor,
       quantidade: formData.quantidade,
       quantidadeMinima: formData.quantidadeMinima,
-      dataEntrada: new Date(formData.dataEntrada),
-      dataVencimento: new Date(formData.dataVencimento),
+      dataEntrada: new Date(formData.dataEntrada).toISOString(),
+      dataVencimento: new Date(formData.dataVencimento).toISOString(),
     }
 
-    if (editingInsumo) {
-      updateInsumo(editingInsumo.id, data)
-      toast.success('Insumo atualizado com sucesso!')
-    } else {
-      createInsumo(data)
-      toast.success('Insumo cadastrado com sucesso!')
+    try {
+      if (editingInsumo) {
+        await insumosApi.update(editingInsumo.id, payload)
+        toast.success('Insumo atualizado com sucesso!')
+      } else {
+        await insumosApi.create(payload)
+        toast.success('Insumo cadastrado com sucesso!')
+      }
+      setIsDialogOpen(false)
+      await loadInsumos()
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error(err.message)
+      } else {
+        toast.error('Erro inesperado ao salvar insumo')
+      }
     }
-
-    setIsDialogOpen(false)
-    loadInsumos()
   }
 
-  const handleDelete = () => {
-    if (deleteId) {
-      deleteInsumo(deleteId)
+  const handleDelete = async () => {
+    if (!deleteId) return
+    try {
+      await insumosApi.delete(deleteId)
       toast.success('Insumo removido com sucesso!')
       setDeleteId(null)
-      loadInsumos()
+      await loadInsumos()
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error(err.message)
+      } else {
+        toast.error('Erro ao remover insumo')
+      }
     }
   }
 
@@ -363,7 +398,7 @@ export default function InsumosPage() {
                       <TableCell><TipoBadge tipo={insumo.tipo} /></TableCell>
                       <TableCell>{insumo.fornecedor}</TableCell>
                       <TableCell className="text-center font-semibold">{insumo.quantidade}</TableCell>
-                      <TableCell>{format(insumo.dataVencimento, 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
+                      <TableCell>{format(new Date(insumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
                       <TableCell><StatusBadge status={insumo.status} /></TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
