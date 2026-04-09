@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
             }
           : {}),
       },
-      orderBy: { nome: 'asc' },
+      orderBy: [{ nome: 'asc' }, { dataVencimento: 'asc' }],
     })
 
     return NextResponse.json(insumos.map(insumoWithStatus))

@@ -174,7 +174,7 @@ export default function SaidasPage() {
               Nova Saída
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md" onInteractOutside={(e) => e.preventDefault()}>
             <DialogHeader>
               <DialogTitle>Registrar Saída</DialogTitle>
               <DialogDescription>
@@ -260,7 +260,7 @@ export default function SaidasPage() {
                     <SelectContent>
                       {insumos.map((insumo) => (
                         <SelectItem key={insumo.id} value={insumo.id}>
-                          {insumo.nome} (Estoque: {insumo.quantidade})
+                          {insumo.nome} - Lote {insumo.lote} (Estoque: {insumo.quantidade})
                         </SelectItem>
                       ))}
                     </SelectContent>
