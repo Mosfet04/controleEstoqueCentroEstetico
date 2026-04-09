@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import { dashboardApi, DashboardApi, ApiError } from '@/lib/api'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { AlertTriangle, Clock, TrendingUp, Package, Trash2, SlidersHorizontal, Users, Activity, XCircle } from 'lucide-react'
+import { AlertTriangle, Clock, TrendingUp, Package, Trash2, SlidersHorizontal, Users, Activity, XCircle, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
@@ -68,6 +69,7 @@ const TIPO_INSUMO_LABELS: Record<string, string> = {
 
 export default function RelatoriosPage() {
   const [data, setData] = useState<DashboardApi | null>(null)
+  const [isDownloading, setIsDownloading] = useState(false)
 
   useEffect(() => {
     dashboardApi.get()
@@ -77,6 +79,28 @@ export default function RelatoriosPage() {
           toast.error('Erro ao carregar relatórios')
         }
       })
+  }, [])
+
+  const handleDownload = useCallback(async () => {
+    setIsDownloading(true)
+    try {
+      const response = await fetch('/api/relatorios/export')
+      if (!response.ok) throw new Error('Erro ao gerar relatório')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = response.headers.get('Content-Disposition')?.split('filename="')[1]?.replace('"', '') ?? 'relatorio.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      toast.success('Relatório baixado com sucesso')
+    } catch {
+      toast.error('Erro ao baixar relatório')
+    } finally {
+      setIsDownloading(false)
+    }
   }, [])
 
   if (!data) {
@@ -118,9 +142,19 @@ export default function RelatoriosPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Relatórios</h1>
-        <p className="text-muted-foreground">Análises e métricas do controle de estoque</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Relatórios</h1>
+          <p className="text-muted-foreground">Análises e métricas do controle de estoque</p>
+        </div>
+        <Button onClick={handleDownload} disabled={isDownloading}>
+          {isDownloading ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Download className="w-4 h-4 mr-2" />
+          )}
+          Exportar XLSX
+        </Button>
       </div>
 
       {/* Cards de resumo */}
