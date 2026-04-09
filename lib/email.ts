@@ -1,11 +1,15 @@
-import { Resend } from 'resend'
+import nodemailer from 'nodemailer'
 
-function getResendClient() {
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) {
-    throw new Error('RESEND_API_KEY não configurada')
+function createTransport() {
+  const user = process.env.GMAIL_USER
+  const pass = process.env.GMAIL_APP_PASSWORD
+  if (!user || !pass) {
+    throw new Error('GMAIL_USER ou GMAIL_APP_PASSWORD não configurados')
   }
-  return new Resend(apiKey)
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user, pass },
+  })
 }
 
 interface SendReportEmailParams {
@@ -21,9 +25,11 @@ export async function sendReportEmail({
   xlsxBuffer,
   filename,
 }: SendReportEmailParams) {
-  const resend = getResendClient()
-  const { error } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL ?? 'Stock Beauty Clinic <relatorios@resend.dev>',
+  const transporter = createTransport()
+  const from = `Stock Beauty Clinic <${process.env.GMAIL_USER}>`
+
+  await transporter.sendMail({
+    from,
     to,
     subject,
     html: `
@@ -55,8 +61,4 @@ export async function sendReportEmail({
       },
     ],
   })
-
-  if (error) {
-    throw new Error(`Falha ao enviar email: ${error.message}`)
-  }
 }
