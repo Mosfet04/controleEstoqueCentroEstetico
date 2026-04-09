@@ -11,22 +11,24 @@ function getFirebaseAdmin() {
   let privateKey: string
 
   if (process.env.FIREBASE_ADMIN_PRIVATE_KEY_BASE64) {
-    // Base64 do arquivo JSON completo da conta de serviço
+    // Base64 da private_key (ou do JSON completo da conta de serviço)
     const decoded = Buffer.from(
       process.env.FIREBASE_ADMIN_PRIVATE_KEY_BASE64.trim(),
       'base64'
     ).toString('utf-8')
     try {
+      // Tenta interpretar como JSON completo da conta de serviço
       const json = JSON.parse(decoded)
       privateKey = json.private_key ?? decoded
     } catch {
+      // Já é a chave PEM diretamente
       privateKey = decoded
     }
   } else if (process.env.FIREBASE_ADMIN_PRIVATE_KEY) {
     // Chave privada direta (com \n literais como no Vercel)
     privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY
   } else {
-    throw new Error('Missing env: FIREBASE_ADMIN_PRIVATE_KEY or FIREBASE_ADMIN_PRIVATE_KEY_BASE64')
+    throw new Error('Missing env: FIREBASE_ADMIN_PRIVATE_KEY_BASE64 or FIREBASE_ADMIN_PRIVATE_KEY')
   }
 
   // Garante que \n literais viram quebras de linha reais
