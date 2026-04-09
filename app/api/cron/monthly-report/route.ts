@@ -21,12 +21,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: 'Nenhum admin encontrado' })
     }
 
-    const data = await getDashboardData()
-    const buffer = await generateReport(data)
-
+    // Cron runs on day 1 — report covers the previous (just-completed) month
     const now = new Date()
-    const month = String(now.getMonth() + 1).padStart(2, '0')
-    const year = now.getFullYear()
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const month = String(prevMonth.getMonth() + 1).padStart(2, '0')
+    const year = prevMonth.getFullYear()
+
+    const data = await getDashboardData(prevMonth)
+    const buffer = await generateReport(data)
 
     await sendReportEmail({
       to: admins.map((a) => a.email),

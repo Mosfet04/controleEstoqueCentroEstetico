@@ -2,10 +2,11 @@ import { prisma } from '@/lib/prisma'
 import { calcularStatus } from '@/lib/insumo-utils'
 import type { DashboardApi } from '@/lib/api'
 
-export async function getDashboardData(): Promise<DashboardApi> {
+export async function getDashboardData(referenceDate?: Date): Promise<DashboardApi> {
   const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+  const ref = referenceDate ?? now
+  const startOfMonth = new Date(ref.getFullYear(), ref.getMonth(), 1)
+  const endOfMonth = new Date(ref.getFullYear(), ref.getMonth() + 1, 0, 23, 59, 59)
   const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
   const sixtyDaysFromNow = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
 
