@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
 import { prisma } from '@/lib/prisma'
-import { requireAuth, isUser } from '@/lib/auth-helpers'
+import { requireAuth, isUser, getUnidadeId } from '@/lib/auth-helpers'
 import { insumoSchema } from '@/lib/validations'
 import { insumoWithStatus } from '@/lib/insumo-utils'
 
@@ -11,12 +11,15 @@ export async function GET(request: NextRequest, { params }: Params) {
   const user = await requireAuth(request)
   if (!isUser(user)) return user
 
+  const unidadeId = getUnidadeId(request)
+  if (unidadeId instanceof NextResponse) return unidadeId
+
   const { id } = await params
 
   try {
     const insumo = await prisma.insumo.findUnique({ where: { id } })
 
-    if (!insumo) {
+    if (!insumo || insumo.unidadeId !== unidadeId) {
       return NextResponse.json({ error: 'Insumo não encontrado' }, { status: 404 })
     }
 
@@ -31,11 +34,14 @@ export async function PUT(request: NextRequest, { params }: Params) {
   const user = await requireAuth(request)
   if (!isUser(user)) return user
 
+  const unidadeId = getUnidadeId(request)
+  if (unidadeId instanceof NextResponse) return unidadeId
+
   const { id } = await params
 
   try {
     const existing = await prisma.insumo.findUnique({ where: { id } })
-    if (!existing) {
+    if (!existing || existing.unidadeId !== unidadeId) {
       return NextResponse.json({ error: 'Insumo não encontrado' }, { status: 404 })
     }
 
@@ -77,11 +83,14 @@ export async function DELETE(request: NextRequest, { params }: Params) {
   const user = await requireAuth(request)
   if (!isUser(user)) return user
 
+  const unidadeId = getUnidadeId(request)
+  if (unidadeId instanceof NextResponse) return unidadeId
+
   const { id } = await params
 
   try {
     const existing = await prisma.insumo.findUnique({ where: { id } })
-    if (!existing) {
+    if (!existing || existing.unidadeId !== unidadeId) {
       return NextResponse.json({ error: 'Insumo não encontrado' }, { status: 404 })
     }
 

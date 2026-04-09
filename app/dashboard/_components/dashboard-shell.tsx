@@ -4,6 +4,7 @@ import { Suspense } from 'react'
 import { AppSidebar } from '@/components/app-sidebar'
 import { NavigationProgress, PageTransition } from '@/components/navigation-progress'
 import { AuthProvider, useAuth } from '@/contexts/auth-context'
+import { UnidadeProvider } from '@/contexts/unidade-context'
 import { Loader2 } from 'lucide-react'
 
 function PageLoader() {
@@ -55,7 +56,9 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
-      <DashboardContent>{children}</DashboardContent>
+      <UnidadeProvider>
+        <DashboardContent>{children}</DashboardContent>
+      </UnidadeProvider>
     </AuthProvider>
   )
 }

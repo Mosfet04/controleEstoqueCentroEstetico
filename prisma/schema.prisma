@@ -23,6 +23,20 @@ enum TipoSaida {
   ajuste
 }
 
+model Unidade {
+  id        String   @id @default(cuid())
+  nome      String
+  endereco  String?
+  telefone  String?
+  ativa     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usuarios User[]
+  insumos  Insumo[]
+  saidas   SaidaInsumo[]
+}
+
 model User {
   id          String    @id @default(cuid())
   firebaseUid String    @unique
@@ -32,6 +46,7 @@ model User {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  unidades    Unidade[]
   saidas      SaidaInsumo[]
 
   @@index([email])
@@ -48,6 +63,8 @@ model Insumo {
   quantidadeMinima Int
   dataEntrada      DateTime
   dataVencimento   DateTime
+  unidadeId        String
+  unidade          Unidade    @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
@@ -55,6 +72,7 @@ model Insumo {
 
   @@index([tipo])
   @@index([dataVencimento])
+  @@index([unidadeId])
 }
 
 model SaidaInsumo {
@@ -63,6 +81,8 @@ model SaidaInsumo {
   insumo       Insumo    @relation(fields: [insumoId], references: [id], onDelete: Restrict)
   userId       String
   user         User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  unidadeId    String
+  unidade      Unidade   @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
   quantidade   Int
   tipo         TipoSaida @default(uso)
   motivo       String?
@@ -74,4 +94,5 @@ model SaidaInsumo {
   @@index([userId])
   @@index([dataRetirada])
   @@index([tipo])
+  @@index([unidadeId])
 }

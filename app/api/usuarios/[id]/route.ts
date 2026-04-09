@@ -31,6 +31,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     }
 
     const { name, email, role } = parsed.data
+    const unidadeIds: string[] | undefined = Array.isArray(body.unidadeIds) ? body.unidadeIds : undefined
 
     // Sync email change to Firebase Auth
     if (email && email !== existing.email) {
@@ -44,6 +45,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
         ...(name ? { name } : {}),
         ...(email ? { email } : {}),
         ...(role ? { role: role as UserRole } : {}),
+        ...(unidadeIds ? { unidades: { set: unidadeIds.map((uid: string) => ({ id: uid })) } } : {}),
       },
       select: {
         id: true,
@@ -51,6 +53,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
         name: true,
         role: true,
         createdAt: true,
+        unidades: { select: { id: true, nome: true } },
       },
     })
 

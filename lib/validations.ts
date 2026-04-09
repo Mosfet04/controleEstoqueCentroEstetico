@@ -1,6 +1,18 @@
 import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
+// Unidade
+// ---------------------------------------------------------------------------
+
+export const unidadeSchema = z.object({
+  nome: z.string().min(1, 'Nome é obrigatório').max(200),
+  endereco: z.string().max(500).optional(),
+  telefone: z.string().max(30).optional(),
+})
+
+export type UnidadeInput = z.infer<typeof unidadeSchema>
+
+// ---------------------------------------------------------------------------
 // Insumo
 // ---------------------------------------------------------------------------
 

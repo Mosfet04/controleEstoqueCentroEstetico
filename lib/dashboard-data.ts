@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { calcularStatus } from '@/lib/insumo-utils'
 import type { DashboardApi } from '@/lib/api'
 
-export async function getDashboardData(referenceDate?: Date): Promise<DashboardApi> {
+export async function getDashboardData(referenceDate?: Date, unidadeId?: string): Promise<DashboardApi> {
   const now = new Date()
   const ref = referenceDate ?? now
   const startOfMonth = new Date(ref.getFullYear(), ref.getMonth(), 1)
@@ -10,20 +10,23 @@ export async function getDashboardData(referenceDate?: Date): Promise<DashboardA
   const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
   const sixtyDaysFromNow = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
 
+  const unitFilter = unidadeId ? { unidadeId } : {}
+
   const [allInsumos, saidasMes, descartesMes, ajustesMes, topSaidas] = await Promise.all([
-    prisma.insumo.findMany(),
+    prisma.insumo.findMany({ where: unitFilter }),
     prisma.saidaInsumo.count({
-      where: { dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'uso' },
+      where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'uso' },
     }),
     prisma.saidaInsumo.count({
-      where: { dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'descarte' },
+      where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'descarte' },
     }),
     prisma.saidaInsumo.count({
-      where: { dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'ajuste' },
+      where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'ajuste' },
     }),
     prisma.saidaInsumo.groupBy({
       by: ['insumoId'],
       _sum: { quantidade: true },
+      where: { ...unitFilter },
       orderBy: { _sum: { quantidade: 'desc' } },
       take: 5,
     }),
@@ -95,17 +98,18 @@ export async function getDashboardData(referenceDate?: Date): Promise<DashboardA
     prisma.saidaInsumo.groupBy({
       by: ['userId', 'tipo'],
       _sum: { quantidade: true },
-      where: { dataRetirada: { gte: startOfMonth, lte: endOfMonth } },
+      where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth } },
     }),
     prisma.saidaInsumo.groupBy({
       by: ['tipo'],
       _sum: { quantidade: true },
-      where: { dataRetirada: { gte: startOfMonth, lte: endOfMonth } },
+      where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth } },
     }),
     prisma.saidaInsumo.groupBy({
       by: ['insumoId'],
       _sum: { quantidade: true },
       where: {
+        ...unitFilter,
         tipo: 'descarte',
         dataRetirada: { gte: startOfMonth, lte: endOfMonth },
       },
@@ -115,11 +119,13 @@ export async function getDashboardData(referenceDate?: Date): Promise<DashboardA
     prisma.insumo.groupBy({
       by: ['fornecedor'],
       _count: { id: true },
+      where: unitFilter,
       orderBy: { _count: { id: 'desc' } },
       take: 5,
     }),
     prisma.saidaInsumo.findMany({
       take: 10,
+      where: unitFilter,
       orderBy: { dataRetirada: 'desc' },
       include: {
         insumo: { select: { nome: true } },
@@ -174,6 +180,7 @@ export async function getDashboardData(referenceDate?: Date): Promise<DashboardA
             where: {
               tipo: 'descarte',
               insumoId: { in: descarteInsumoIds },
+              ...unitFilter,
               dataRetirada: { gte: startOfMonth, lte: endOfMonth },
             },
             select: { insumoId: true, motivo: true },

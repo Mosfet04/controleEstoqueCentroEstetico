@@ -17,6 +17,7 @@ import { dashboardApi, DashboardApi } from '@/lib/api'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
+import { useUnidade } from '@/contexts/unidade-context'
 
 type StatusEstoque = 'bom' | 'atencao' | 'critico'
 type TipoInsumo = 'injetavel' | 'descartavel' | 'peeling'
@@ -106,6 +107,7 @@ function TipoBadge({ tipo }: { tipo: TipoInsumo }) {
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardApi | null>(null)
+  const { unidadeAtiva } = useUnidade()
 
   useEffect(() => {
     dashboardApi.get()
@@ -127,7 +129,9 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground">Visão geral do estoque da clínica</p>
+        <p className="text-muted-foreground">
+          {unidadeAtiva ? `${unidadeAtiva.nome} — ` : ''}Visão geral do estoque da clínica
+        </p>
       </div>
 
       {/* Métricas principais */}

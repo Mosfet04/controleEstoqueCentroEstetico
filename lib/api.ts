@@ -17,10 +17,12 @@ export class ApiError extends Error {
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const unidadeId = typeof window !== 'undefined' ? localStorage.getItem('unidadeAtiva') : null
   const response = await fetch(path, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      ...(unidadeId ? { 'x-unidade-id': unidadeId } : {}),
       ...(init?.headers ?? {}),
     },
   })
@@ -42,6 +44,29 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return data as T
+}
+
+// ---------------------------------------------------------------------------
+// Unidades
+// ---------------------------------------------------------------------------
+
+export interface UnidadeApi {
+  id: string
+  nome: string
+  endereco?: string | null
+  telefone?: string | null
+  ativa: boolean
+  createdAt: string
+}
+
+export const unidadesApi = {
+  list: () => apiFetch<UnidadeApi[]>('/api/unidades'),
+  create: (data: { nome: string; endereco?: string; telefone?: string }) =>
+    apiFetch<UnidadeApi>('/api/unidades', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: { nome?: string; endereco?: string; telefone?: string }) =>
+    apiFetch<UnidadeApi>(`/api/unidades/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    apiFetch<{ success: boolean }>(`/api/unidades/${id}`, { method: 'DELETE' }),
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +155,7 @@ export interface UserApi {
   name: string
   role: 'admin' | 'clinico'
   createdAt: string
+  unidades?: { id: string; nome: string }[]
 }
 
 export const usuariosApi = {

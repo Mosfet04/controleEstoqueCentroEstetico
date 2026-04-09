@@ -60,3 +60,19 @@ export async function requireAdmin(
 export function isUser(value: AuthenticatedUser | NextResponse): value is AuthenticatedUser {
   return !(value instanceof NextResponse)
 }
+
+/**
+ * Extracts the x-unidade-id header from the request.
+ * Returns the unidade ID string or a 400 response if missing.
+ */
+export function getUnidadeId(
+  request: NextRequest
+): string | NextResponse {
+  const unidadeId = request.headers.get('x-unidade-id')
+
+  if (!unidadeId) {
+    return NextResponse.json({ error: 'Unidade não selecionada' }, { status: 400 })
+  }
+
+  return unidadeId
+}

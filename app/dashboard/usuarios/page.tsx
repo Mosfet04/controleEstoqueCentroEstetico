@@ -41,7 +41,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Plus, Users, Pencil, Trash2, Shield, User as UserIcon } from 'lucide-react'
-import { usuariosApi, UserApi, ApiError } from '@/lib/api'
+import { usuariosApi, unidadesApi, UserApi, UnidadeApi, ApiError } from '@/lib/api'
 import { useAuth } from '@/contexts/auth-context'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -54,6 +54,7 @@ interface UserFormData {
   email: string
   role: UserRole
   password: string
+  unidadeIds: string[]
 }
 
 const initialFormData: UserFormData = {
@@ -61,12 +62,14 @@ const initialFormData: UserFormData = {
   email: '',
   role: 'clinico',
   password: '',
+  unidadeIds: [],
 }
 
 export default function UsuariosPage() {
   const router = useRouter()
   const { user: currentUser, isLoading } = useAuth()
   const [users, setUsers] = useState<UserApi[]>([])
+  const [allUnidades, setAllUnidades] = useState<UnidadeApi[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserApi | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -74,8 +77,9 @@ export default function UsuariosPage() {
 
   const loadUsers = async () => {
     try {
-      const data = await usuariosApi.list()
+      const [data, unidades] = await Promise.all([usuariosApi.list(), unidadesApi.list()])
       setUsers(data)
+      setAllUnidades(unidades)
     } catch (err) {
       if (err instanceof ApiError && err.status !== 401) {
         toast.error('Erro ao carregar usuários')
@@ -101,6 +105,7 @@ export default function UsuariosPage() {
         email: user.email,
         role: user.role,
         password: '',
+        unidadeIds: user.unidades?.map((u) => u.id) ?? [],
       })
     } else {
       setEditingUser(null)
@@ -118,7 +123,8 @@ export default function UsuariosPage() {
           name: formData.name,
           email: formData.email,
           role: formData.role,
-        })
+          unidadeIds: formData.unidadeIds,
+        } as Parameters<typeof usuariosApi.update>[1])
         toast.success('Usuário atualizado com sucesso!')
       } else {
         await usuariosApi.create({
@@ -126,7 +132,8 @@ export default function UsuariosPage() {
           email: formData.email,
           role: formData.role,
           password: formData.password,
-        })
+          unidadeIds: formData.unidadeIds,
+        } as Parameters<typeof usuariosApi.create>[0])
         toast.success('Usuário criado com sucesso!')
       }
       setIsDialogOpen(false)
@@ -224,6 +231,33 @@ export default function UsuariosPage() {
                   </Select>
                 </Field>
 
+                <Field>
+                  <FieldLabel>Unidades</FieldLabel>
+                  <div className="flex flex-wrap gap-2 p-2 border rounded-md min-h-[40px]">
+                    {allUnidades.filter((u) => u.ativa).map((u) => {
+                      const checked = formData.unidadeIds.includes(u.id)
+                      return (
+                        <label key={u.id} className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setFormData((prev) => ({
+                                ...prev,
+                                unidadeIds: checked
+                                  ? prev.unidadeIds.filter((id) => id !== u.id)
+                                  : [...prev.unidadeIds, u.id],
+                              }))
+                            }}
+                            className="rounded border-input"
+                          />
+                          <span className="text-sm">{u.nome}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </Field>
+
                 {!editingUser && (
                   <Field>
                     <FieldLabel>Senha temporária</FieldLabel>
@@ -268,6 +302,7 @@ export default function UsuariosPage() {
                   <TableHead>Nome</TableHead>
                   <TableHead>E-mail</TableHead>
                   <TableHead>Função</TableHead>
+                  <TableHead>Unidades</TableHead>
                   <TableHead>Cadastrado em</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -302,6 +337,16 @@ export default function UsuariosPage() {
                           <><UserIcon className="w-3 h-3 mr-1" /> Clínico</>
                         )}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {user.unidades?.map((u) => (
+                          <Badge key={u.id} variant="outline" className="text-xs">{u.nome}</Badge>
+                        ))}
+                        {(!user.unidades || user.unidades.length === 0) && (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>{format(new Date(user.createdAt), "dd/MM/yyyy", { locale: ptBR })}</TableCell>
                     <TableCell className="text-right">

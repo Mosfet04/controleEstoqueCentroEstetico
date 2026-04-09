@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
         name: true,
         role: true,
         createdAt: true,
+        unidades: { select: { id: true, nome: true } },
       },
       orderBy: { createdAt: 'asc' },
     })
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { name, email, role, password } = parsed.data
+    const unidadeIds: string[] = Array.isArray(body.unidadeIds) ? body.unidadeIds : []
 
     // Check if email already exists in DB before touching Firebase
     const existing = await prisma.user.findUnique({ where: { email } })
@@ -71,6 +73,9 @@ export async function POST(request: NextRequest) {
           name,
           email,
           role: role as UserRole,
+          ...(unidadeIds.length > 0
+            ? { unidades: { connect: unidadeIds.map((id: string) => ({ id })) } }
+            : {}),
         },
         select: {
           id: true,
@@ -78,6 +83,7 @@ export async function POST(request: NextRequest) {
           name: true,
           role: true,
           createdAt: true,
+          unidades: { select: { id: true, nome: true } },
         },
       })
     } catch (dbError) {

@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
 import { prisma } from '@/lib/prisma'
-import { requireAuth, isUser } from '@/lib/auth-helpers'
+import { requireAuth, isUser, getUnidadeId } from '@/lib/auth-helpers'
 import { saidaSchema } from '@/lib/validations'
 
 export async function GET(request: NextRequest) {
   const user = await requireAuth(request)
   if (!isUser(user)) return user
 
+  const unidadeId = getUnidadeId(request)
+  if (unidadeId instanceof NextResponse) return unidadeId
+
   try {
     const saidas = await prisma.saidaInsumo.findMany({
+      where: { unidadeId },
       include: {
         insumo: { select: { nome: true, lote: true } },
         user: { select: { name: true, email: true } },
@@ -42,6 +46,9 @@ export async function POST(request: NextRequest) {
   const user = await requireAuth(request)
   if (!isUser(user)) return user
 
+  const unidadeId = getUnidadeId(request)
+  if (unidadeId instanceof NextResponse) return unidadeId
+
   try {
     const body = await request.json()
     const parsed = saidaSchema.safeParse(body)
@@ -59,10 +66,10 @@ export async function POST(request: NextRequest) {
     const result = await prisma.$transaction(async (tx) => {
       const insumo = await tx.insumo.findUnique({
         where: { id: insumoId },
-        select: { id: true, nome: true, quantidade: true },
+        select: { id: true, nome: true, quantidade: true, unidadeId: true },
       })
 
-      if (!insumo) {
+      if (!insumo || insumo.unidadeId !== unidadeId) {
         throw new Error('INSUMO_NOT_FOUND')
       }
 
@@ -79,6 +86,7 @@ export async function POST(request: NextRequest) {
         data: {
           insumoId,
           userId: user.id,
+          unidadeId,
           quantidade,
           tipo: tipo ?? 'uso',
           motivo: motivo ?? null,

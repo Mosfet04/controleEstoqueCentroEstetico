@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
 import { prisma } from '@/lib/prisma'
-import { requireAuth, isUser } from '@/lib/auth-helpers'
+import { requireAuth, isUser, getUnidadeId } from '@/lib/auth-helpers'
 import { insumoSchema } from '@/lib/validations'
 import { insumoWithStatus } from '@/lib/insumo-utils'
 import { TipoInsumo } from '@prisma/client'
@@ -10,6 +10,9 @@ export async function GET(request: NextRequest) {
   const user = await requireAuth(request)
   if (!isUser(user)) return user
 
+  const unidadeId = getUnidadeId(request)
+  if (unidadeId instanceof NextResponse) return unidadeId
+
   try {
     const { searchParams } = request.nextUrl
     const tipo = searchParams.get('tipo') as TipoInsumo | null
@@ -17,6 +20,7 @@ export async function GET(request: NextRequest) {
 
     const insumos = await prisma.insumo.findMany({
       where: {
+        unidadeId,
         ...(tipo ? { tipo } : {}),
         ...(search
           ? {
@@ -42,6 +46,9 @@ export async function POST(request: NextRequest) {
   const user = await requireAuth(request)
   if (!isUser(user)) return user
 
+  const unidadeId = getUnidadeId(request)
+  if (unidadeId instanceof NextResponse) return unidadeId
+
   try {
     const body = await request.json()
     const parsed = insumoSchema.safeParse(body)
@@ -60,6 +67,7 @@ export async function POST(request: NextRequest) {
         ...rest,
         dataEntrada: new Date(dataEntrada),
         dataVencimento: new Date(dataVencimento),
+        unidadeId,
       },
     })
 

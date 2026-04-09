@@ -12,11 +12,15 @@ import {
   Sparkles,
   Menu,
   Loader2,
+  Building2,
+  ChevronDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/auth-context'
+import { useUnidade } from '@/contexts/unidade-context'
 
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -25,11 +29,15 @@ const menuItems = [
   { href: '/dashboard/relatorios', label: 'Relatórios', icon: BarChart3 },
 ]
 
-const adminItems = [{ href: '/dashboard/usuarios', label: 'Usuários', icon: Users }]
+const adminItems = [
+  { href: '/dashboard/usuarios', label: 'Usuários', icon: Users },
+  { href: '/dashboard/unidades', label: 'Unidades', icon: Building2 },
+]
 
 export function AppSidebar() {
   const pathname = usePathname()
   const { user, signOut } = useAuth()
+  const { unidades, unidadeAtiva, setUnidadeAtiva } = useUnidade()
   const [isOpen, setIsOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null)
@@ -66,6 +74,35 @@ export function AppSidebar() {
           <span className="text-xs text-sidebar-foreground/60">Controle de Estoque</span>
         </div>
       </div>
+
+      {unidades.length > 0 && (
+        <div className="px-3 py-3 border-b border-sidebar-border">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm font-medium bg-sidebar-accent/50 hover:bg-sidebar-accent text-sidebar-foreground transition-colors">
+                <Building2 className="w-4 h-4 text-sidebar-primary shrink-0" />
+                <span className="truncate flex-1 text-left">{unidadeAtiva?.nome ?? 'Selecionar'}</span>
+                <ChevronDown className="w-4 h-4 shrink-0 text-sidebar-foreground/60" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              {unidades.filter((u) => u.ativa).map((u) => (
+                <DropdownMenuItem
+                  key={u.id}
+                  onClick={() => {
+                    setUnidadeAtiva(u)
+                    window.location.reload()
+                  }}
+                  className={cn(u.id === unidadeAtiva?.id && 'bg-accent')}
+                >
+                  <Building2 className="w-4 h-4 mr-2" />
+                  {u.nome}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
 
       <nav className="flex-1 px-3 py-4">
         <ul className="space-y-1">

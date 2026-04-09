@@ -27,18 +27,22 @@ export async function GET(request: NextRequest) {
     const month = String(prevMonth.getMonth() + 1).padStart(2, '0')
     const year = prevMonth.getFullYear()
 
-    const data = await getDashboardData(prevMonth)
-    const buffer = await generateReport(data)
+    const unidades = await prisma.unidade.findMany({ where: { ativa: true } })
 
-    await sendReportEmail({
-      to: admins.map((a) => a.email),
-      subject: `Relatório Mensal de Estoque — ${month}/${year}`,
-      xlsxBuffer: buffer,
-      filename: `relatorio-estoque-${year}-${month}.xlsx`,
-    })
+    for (const unidade of unidades) {
+      const data = await getDashboardData(prevMonth, unidade.id)
+      const buffer = await generateReport(data)
+
+      await sendReportEmail({
+        to: admins.map((a) => a.email),
+        subject: `Relatório Mensal de Estoque — ${unidade.nome} — ${month}/${year}`,
+        xlsxBuffer: buffer,
+        filename: `relatorio-estoque-${unidade.nome.toLowerCase().replace(/\s+/g, '-')}-${year}-${month}.xlsx`,
+      })
+    }
 
     return NextResponse.json({
-      message: `Relatório enviado para ${admins.length} admin(s)`,
+      message: `Relatório enviado para ${admins.length} admin(s) — ${unidades.length} unidade(s)`,
     })
   } catch (error) {
     Sentry.captureException(error, {
