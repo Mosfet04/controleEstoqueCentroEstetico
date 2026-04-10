@@ -79,12 +79,14 @@ export default function RelatoriosPage() {
   const now = new Date()
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(now), 'yyyy-MM-dd'))
   const [dateTo, setDateTo] = useState(format(endOfMonth(now), 'yyyy-MM-dd'))
+  const [appliedFrom, setAppliedFrom] = useState(dateFrom)
+  const [appliedTo, setAppliedTo] = useState(dateTo)
 
   const loadData = useCallback(() => {
     setData(null)
     dashboardApi.get({
-      from: new Date(dateFrom).toISOString(),
-      to: new Date(dateTo + 'T23:59:59').toISOString(),
+      from: new Date(appliedFrom).toISOString(),
+      to: new Date(appliedTo + 'T23:59:59').toISOString(),
     })
       .then(setData)
       .catch((err) => {
@@ -92,15 +94,22 @@ export default function RelatoriosPage() {
           toast.error('Erro ao carregar relatórios')
         }
       })
-  }, [dateFrom, dateTo])
+  }, [appliedFrom, appliedTo])
 
   useEffect(() => {
     loadData()
   }, [loadData])
 
+  const handleFilter = useCallback(() => {
+    setAppliedFrom(dateFrom)
+    setAppliedTo(dateTo)
+  }, [dateFrom, dateTo])
+
   useEffect(() => {
     comparativoApi.get().then(setComparativo).catch(() => {})
-    previsaoApi.list().then(setPrevisao).catch(() => {})
+    previsaoApi.list().then(setPrevisao).catch(() => {
+      setPrevisao([])
+    })
   }, [])
 
   const handleDownload = useCallback(async () => {
@@ -110,8 +119,8 @@ export default function RelatoriosPage() {
       const savedId = localStorage.getItem('unidadeAtiva')
       if (savedId) headers['x-unidade-id'] = savedId
       const params = new URLSearchParams({
-        from: new Date(dateFrom).toISOString(),
-        to: new Date(dateTo + 'T23:59:59').toISOString(),
+        from: new Date(appliedFrom).toISOString(),
+        to: new Date(appliedTo + 'T23:59:59').toISOString(),
       })
       const response = await fetch(`/api/relatorios/export?${params}`, { headers })
       if (!response.ok) throw new Error('Erro ao gerar relatório')
@@ -130,7 +139,7 @@ export default function RelatoriosPage() {
     } finally {
       setIsDownloading(false)
     }
-  }, [dateFrom, dateTo])
+  }, [appliedFrom, appliedTo])
 
   if (!data) {
     return (
@@ -207,6 +216,10 @@ export default function RelatoriosPage() {
               onChange={(e) => setDateTo(e.target.value)}
               className="w-[160px]"
             />
+            <Button onClick={handleFilter} size="sm">
+              <CalendarIcon className="w-4 h-4 mr-2" />
+              Filtrar
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -741,16 +754,22 @@ export default function RelatoriosPage() {
       )}
 
       {/* Previsão de Reposição */}
-      {previsao && previsao.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Gauge className="w-5 h-5 text-primary" />
-              Velocidade de Consumo &amp; Previsão de Reposição
-            </CardTitle>
-            <CardDescription>Estimativa de dias restantes baseada no consumo dos últimos 90 dias</CardDescription>
-          </CardHeader>
-          <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Gauge className="w-5 h-5 text-primary" />
+            Velocidade de Consumo &amp; Previsão de Reposição
+          </CardTitle>
+          <CardDescription>Estimativa de dias restantes baseada no consumo dos últimos 90 dias</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {previsao === null ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : previsao.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-8">A previsão de reposição será calculada automaticamente quando houver insumos cadastrados e histórico de saídas.</p>
+          ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -793,9 +812,9 @@ export default function RelatoriosPage() {
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
