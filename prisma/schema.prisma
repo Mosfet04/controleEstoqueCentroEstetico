@@ -49,6 +49,7 @@ model User {
 
   unidades    Unidade[]
   saidas      SaidaInsumo[]
+  auditLogs   AuditLog[]
 
   @@index([email])
   @@index([firebaseUid])
@@ -96,4 +97,19 @@ model SaidaInsumo {
   @@index([dataRetirada])
   @@index([tipo])
   @@index([unidadeId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  action    String
+  entity    String
+  entityId  String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
 }

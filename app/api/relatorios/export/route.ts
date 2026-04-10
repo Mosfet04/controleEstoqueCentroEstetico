@@ -15,13 +15,23 @@ export async function GET(request: NextRequest) {
   if (unidadeId instanceof NextResponse) return unidadeId
 
   try {
-    const data = await getDashboardData(undefined, unidadeId ?? undefined)
+    const { searchParams } = request.nextUrl
+    const from = searchParams.get('from')
+    const to = searchParams.get('to')
+    const dateRange = from && to
+      ? { from: new Date(from), to: new Date(to) }
+      : undefined
+
+    const data = await getDashboardData(undefined, unidadeId ?? undefined, dateRange)
     const buffer = await generateReport(data)
 
     const now = new Date()
     const month = String(now.getMonth() + 1).padStart(2, '0')
     const year = now.getFullYear()
-    const filename = `relatorio-estoque-${year}-${month}.xlsx`
+    const suffix = dateRange
+      ? `${from}-a-${to}`
+      : `${year}-${month}`
+    const filename = `relatorio-estoque-${suffix}.xlsx`
 
     return new NextResponse(buffer, {
       headers: {

@@ -4,11 +4,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
-import { dashboardApi, DashboardApi, ApiError } from '@/lib/api'
-import { format, differenceInDays } from 'date-fns'
+import { dashboardApi, DashboardApi, comparativoApi, ComparativoApi, previsaoApi, PrevisaoItem, ApiError } from '@/lib/api'
+import { format, differenceInDays, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { AlertTriangle, Clock, TrendingUp, Package, Trash2, SlidersHorizontal, Users, Activity, XCircle, Download, Loader2 } from 'lucide-react'
+import { AlertTriangle, Clock, TrendingUp, Package, Trash2, SlidersHorizontal, Users, Activity, XCircle, Download, Loader2, CalendarIcon, Building2, Gauge } from 'lucide-react'
 import { toast } from 'sonner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useUnidade } from '@/contexts/unidade-context'
@@ -70,17 +71,36 @@ const TIPO_INSUMO_LABELS: Record<string, string> = {
 
 export default function RelatoriosPage() {
   const [data, setData] = useState<DashboardApi | null>(null)
+  const [comparativo, setComparativo] = useState<ComparativoApi | null>(null)
+  const [previsao, setPrevisao] = useState<PrevisaoItem[] | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
   const { unidadeAtiva } = useUnidade()
 
-  useEffect(() => {
-    dashboardApi.get()
+  const now = new Date()
+  const [dateFrom, setDateFrom] = useState(format(startOfMonth(now), 'yyyy-MM-dd'))
+  const [dateTo, setDateTo] = useState(format(endOfMonth(now), 'yyyy-MM-dd'))
+
+  const loadData = useCallback(() => {
+    setData(null)
+    dashboardApi.get({
+      from: new Date(dateFrom).toISOString(),
+      to: new Date(dateTo + 'T23:59:59').toISOString(),
+    })
       .then(setData)
       .catch((err) => {
         if (err instanceof ApiError && err.status !== 401) {
           toast.error('Erro ao carregar relatórios')
         }
       })
+  }, [dateFrom, dateTo])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  useEffect(() => {
+    comparativoApi.get().then(setComparativo).catch(() => {})
+    previsaoApi.list().then(setPrevisao).catch(() => {})
   }, [])
 
   const handleDownload = useCallback(async () => {
@@ -89,7 +109,11 @@ export default function RelatoriosPage() {
       const headers: Record<string, string> = {}
       const savedId = localStorage.getItem('unidadeAtiva')
       if (savedId) headers['x-unidade-id'] = savedId
-      const response = await fetch('/api/relatorios/export', { headers })
+      const params = new URLSearchParams({
+        from: new Date(dateFrom).toISOString(),
+        to: new Date(dateTo + 'T23:59:59').toISOString(),
+      })
+      const response = await fetch(`/api/relatorios/export?${params}`, { headers })
       if (!response.ok) throw new Error('Erro ao gerar relatório')
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
@@ -106,7 +130,7 @@ export default function RelatoriosPage() {
     } finally {
       setIsDownloading(false)
     }
-  }, [])
+  }, [dateFrom, dateTo])
 
   if (!data) {
     return (
@@ -147,7 +171,7 @@ export default function RelatoriosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Relatórios</h1>
           <p className="text-muted-foreground">
@@ -163,6 +187,29 @@ export default function RelatoriosPage() {
           Exportar XLSX
         </Button>
       </div>
+
+      {/* Filtro de período */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <CalendarIcon className="w-4 h-4 text-muted-foreground hidden sm:block" />
+            <span className="text-sm font-medium text-muted-foreground">Período:</span>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="w-[160px]"
+            />
+            <span className="text-sm text-muted-foreground">até</span>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="w-[160px]"
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Cards de resumo */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -635,6 +682,120 @@ export default function RelatoriosPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Comparativo entre Unidades */}
+      {comparativo && comparativo.unidades.length > 1 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-primary" />
+              Comparativo entre Unidades
+            </CardTitle>
+            <CardDescription>Métricas lado a lado de cada unidade (mês atual)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Unidade</TableHead>
+                    <TableHead className="text-right">Insumos</TableHead>
+                    <TableHead className="text-right">Ativos</TableHead>
+                    <TableHead className="text-right">Críticos</TableHead>
+                    <TableHead className="text-right">Vencendo</TableHead>
+                    <TableHead className="text-right">Saídas</TableHead>
+                    <TableHead className="text-right">Descartes</TableHead>
+                    <TableHead className="text-right">Ajustes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {comparativo.unidades.map((u) => (
+                    <TableRow key={u.id}>
+                      <TableCell className="font-medium">{u.nome}</TableCell>
+                      <TableCell className="text-right">{u.totalInsumos}</TableCell>
+                      <TableCell className="text-right">{u.insumosAtivos}</TableCell>
+                      <TableCell className="text-right">
+                        {u.insumosCriticos > 0 ? (
+                          <Badge variant="destructive">{u.insumosCriticos}</Badge>
+                        ) : (
+                          u.insumosCriticos
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {u.insumosVencendo > 0 ? (
+                          <Badge variant="secondary">{u.insumosVencendo}</Badge>
+                        ) : (
+                          u.insumosVencendo
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">{u.saidasMes}</TableCell>
+                      <TableCell className="text-right">{u.descartesMes}</TableCell>
+                      <TableCell className="text-right">{u.ajustesMes}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Previsão de Reposição */}
+      {previsao && previsao.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Gauge className="w-5 h-5 text-primary" />
+              Velocidade de Consumo &amp; Previsão de Reposição
+            </CardTitle>
+            <CardDescription>Estimativa de dias restantes baseada no consumo dos últimos 90 dias</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Insumo</TableHead>
+                    <TableHead>Lote</TableHead>
+                    <TableHead>Unidade</TableHead>
+                    <TableHead className="text-right">Estoque</TableHead>
+                    <TableHead className="text-right">Média/dia</TableHead>
+                    <TableHead className="text-right">Dias Restantes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {previsao.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.nome}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.lote || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.unidadeNome}</TableCell>
+                      <TableCell className="text-right">{item.quantidade}</TableCell>
+                      <TableCell className="text-right">{item.mediaDiaria.toFixed(1)}</TableCell>
+                      <TableCell className="text-right">
+                        {item.diasRestantes === null ? (
+                          <span className="text-muted-foreground">Sem consumo</span>
+                        ) : (
+                          <Badge
+                            variant={
+                              item.diasRestantes <= 7
+                                ? 'destructive'
+                                : item.diasRestantes <= 30
+                                  ? 'secondary'
+                                  : 'default'
+                            }
+                          >
+                            {item.diasRestantes}d
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

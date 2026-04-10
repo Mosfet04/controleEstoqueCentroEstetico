@@ -236,5 +236,78 @@ export interface DashboardApi {
 }
 
 export const dashboardApi = {
-  get: () => apiFetch<DashboardApi>('/api/dashboard'),
+  get: (params?: { from?: string; to?: string }) => {
+    const search = new URLSearchParams()
+    if (params?.from) search.set('from', params.from)
+    if (params?.to) search.set('to', params.to)
+    const qs = search.toString()
+    return apiFetch<DashboardApi>(`/api/dashboard${qs ? `?${qs}` : ''}`)
+  },
+}
+
+// ---------------------------------------------------------------------------
+// Auditoria
+// ---------------------------------------------------------------------------
+
+export interface AuditLogApi {
+  id: string
+  userId: string
+  user: { name: string; email: string }
+  action: string
+  entity: string
+  entityId: string
+  details: Record<string, unknown> | null
+  createdAt: string
+}
+
+export const auditoriaApi = {
+  list: (params?: { entity?: string; action?: string; userId?: string; limit?: number }) => {
+    const search = new URLSearchParams()
+    if (params?.entity) search.set('entity', params.entity)
+    if (params?.action) search.set('action', params.action)
+    if (params?.userId) search.set('userId', params.userId)
+    if (params?.limit) search.set('limit', String(params.limit))
+    const qs = search.toString()
+    return apiFetch<AuditLogApi[]>(`/api/auditoria${qs ? `?${qs}` : ''}`)
+  },
+}
+
+// ---------------------------------------------------------------------------
+// Comparativo entre Unidades
+// ---------------------------------------------------------------------------
+
+export interface ComparativoApi {
+  unidades: {
+    id: string
+    nome: string
+    totalInsumos: number
+    insumosAtivos: number
+    insumosCriticos: number
+    insumosVencendo: number
+    saidasMes: number
+    descartesMes: number
+    ajustesMes: number
+  }[]
+}
+
+export const comparativoApi = {
+  get: () => apiFetch<ComparativoApi>('/api/comparativo'),
+}
+
+// ---------------------------------------------------------------------------
+// Velocidade de Consumo / Previsão
+// ---------------------------------------------------------------------------
+
+export interface PrevisaoItem {
+  id: string
+  nome: string
+  lote: string
+  unidadeNome: string
+  quantidade: number
+  mediaDiaria: number
+  diasRestantes: number | null
+}
+
+export const previsaoApi = {
+  list: () => apiFetch<PrevisaoItem[]>('/api/previsao'),
 }

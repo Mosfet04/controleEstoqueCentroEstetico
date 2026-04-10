@@ -15,6 +15,7 @@ import {
   Building2,
   ChevronDown,
   Globe,
+  ClipboardList,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
@@ -33,6 +34,7 @@ const menuItems = [
 const adminItems = [
   { href: '/dashboard/usuarios', label: 'Usuários', icon: Users },
   { href: '/dashboard/unidades', label: 'Unidades', icon: Building2 },
+  { href: '/dashboard/auditoria', label: 'Auditoria', icon: ClipboardList },
 ]
 
 export function AppSidebar() {

@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/nextjs'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin, requireAuth, isUser } from '@/lib/auth-helpers'
 import { createUserSchema } from '@/lib/validations'
+import { withAuditContext } from '@/lib/audit-context'
 import { getAdminAuth } from '@/lib/firebase-admin'
 import { UserRole } from '@prisma/client'
 
@@ -35,74 +36,76 @@ export async function POST(request: NextRequest) {
   const admin = await requireAdmin(request)
   if (!isUser(admin)) return admin
 
-  try {
-    const body = await request.json()
-    const parsed = createUserSchema.safeParse(body)
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: 'Dados inválidos', details: parsed.error.flatten().fieldErrors },
-        { status: 422 }
-      )
-    }
-
-    const { name, email, role, password } = parsed.data
-    const unidadeIds: string[] = Array.isArray(body.unidadeIds) ? body.unidadeIds : []
-
-    // Check if email already exists in DB before touching Firebase
-    const existing = await prisma.user.findUnique({ where: { email } })
-    if (existing) {
-      return NextResponse.json(
-        { error: 'Já existe um usuário com este e-mail' },
-        { status: 409 }
-      )
-    }
-
-    // Create Firebase Auth user — server handles credentials, not the client
-    const firebaseAuth = getAdminAuth()
-    const firebaseUser = await firebaseAuth.createUser({
-      email,
-      password,
-      displayName: name,
-    })
-
-    let newUser
+  return withAuditContext(admin.id, async () => {
     try {
-      newUser = await prisma.user.create({
-        data: {
-          firebaseUid: firebaseUser.uid,
-          name,
-          email,
-          role: role as UserRole,
-          ...(unidadeIds.length > 0
-            ? { unidades: { connect: unidadeIds.map((id: string) => ({ id })) } }
-            : {}),
-        },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          ativo: true,
-          createdAt: true,
-          unidades: { select: { id: true, nome: true } },
-        },
+      const body = await request.json()
+      const parsed = createUserSchema.safeParse(body)
+
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: 'Dados inválidos', details: parsed.error.flatten().fieldErrors },
+          { status: 422 }
+        )
+      }
+
+      const { name, email, role, password } = parsed.data
+      const unidadeIds: string[] = Array.isArray(body.unidadeIds) ? body.unidadeIds : []
+
+      // Check if email already exists in DB before touching Firebase
+      const existing = await prisma.user.findUnique({ where: { email } })
+      if (existing) {
+        return NextResponse.json(
+          { error: 'Já existe um usuário com este e-mail' },
+          { status: 409 }
+        )
+      }
+
+      // Create Firebase Auth user — server handles credentials, not the client
+      const firebaseAuth = getAdminAuth()
+      const firebaseUser = await firebaseAuth.createUser({
+        email,
+        password,
+        displayName: name,
       })
-    } catch (dbError) {
-      // Compensate: roll back Firebase user creation if DB insert fails
-      await firebaseAuth.deleteUser(firebaseUser.uid).catch(() => null)
-      throw dbError
+
+      let newUser
+      try {
+        newUser = await prisma.user.create({
+          data: {
+            firebaseUid: firebaseUser.uid,
+            name,
+            email,
+            role: role as UserRole,
+            ...(unidadeIds.length > 0
+              ? { unidades: { connect: unidadeIds.map((id: string) => ({ id })) } }
+              : {}),
+          },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            ativo: true,
+            createdAt: true,
+            unidades: { select: { id: true, nome: true } },
+          },
+        })
+      } catch (dbError) {
+        // Compensate: roll back Firebase user creation if DB insert fails
+        await firebaseAuth.deleteUser(firebaseUser.uid).catch(() => null)
+        throw dbError
+      }
+
+      Sentry.addBreadcrumb({
+        message: `Usuário criado: ${newUser.email}`,
+        category: 'usuario',
+        data: { id: newUser.id, adminId: admin.id },
+      })
+
+      return NextResponse.json(newUser, { status: 201 })
+    } catch (error) {
+      Sentry.captureException(error, { tags: { route: 'POST /api/usuarios' } })
+      return NextResponse.json({ error: 'Erro ao criar usuário' }, { status: 500 })
     }
-
-    Sentry.addBreadcrumb({
-      message: `Usuário criado: ${newUser.email}`,
-      category: 'usuario',
-      data: { id: newUser.id, adminId: admin.id },
-    })
-
-    return NextResponse.json(newUser, { status: 201 })
-  } catch (error) {
-    Sentry.captureException(error, { tags: { route: 'POST /api/usuarios' } })
-    return NextResponse.json({ error: 'Erro ao criar usuário' }, { status: 500 })
-  }
+  })
 }

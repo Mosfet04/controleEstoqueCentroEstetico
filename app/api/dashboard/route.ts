@@ -14,7 +14,14 @@ export async function GET(request: NextRequest) {
   if (unidadeId instanceof NextResponse) return unidadeId
 
   try {
-    const data = await getDashboardData(undefined, unidadeId ?? undefined)
+    const { searchParams } = request.nextUrl
+    const from = searchParams.get('from')
+    const to = searchParams.get('to')
+    const dateRange = from && to
+      ? { from: new Date(from), to: new Date(to) }
+      : undefined
+
+    const data = await getDashboardData(undefined, unidadeId ?? undefined, dateRange)
     return NextResponse.json(data)
   } catch (error) {
     Sentry.captureException(error, { tags: { route: 'GET /api/dashboard' } })
