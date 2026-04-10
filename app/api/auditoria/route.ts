@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
     const entity = searchParams.get('entity')
     const action = searchParams.get('action')
     const userId = searchParams.get('userId')
+    const from = searchParams.get('from')
+    const to = searchParams.get('to')
     const limit = Math.min(Number(searchParams.get('limit')) || 50, 200)
 
     const logs = await prisma.auditLog.findMany({
@@ -19,6 +21,14 @@ export async function GET(request: NextRequest) {
         ...(entity ? { entity } : {}),
         ...(action ? { action } : {}),
         ...(userId ? { userId } : {}),
+        ...(from || to
+          ? {
+              createdAt: {
+                ...(from ? { gte: new Date(from) } : {}),
+                ...(to ? { lte: new Date(to) } : {}),
+              },
+            }
+          : {}),
       },
       include: {
         user: { select: { name: true, email: true } },

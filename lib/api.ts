@@ -261,11 +261,13 @@ export interface AuditLogApi {
 }
 
 export const auditoriaApi = {
-  list: (params?: { entity?: string; action?: string; userId?: string; limit?: number }) => {
+  list: (params?: { entity?: string; action?: string; userId?: string; from?: string; to?: string; limit?: number }) => {
     const search = new URLSearchParams()
     if (params?.entity) search.set('entity', params.entity)
     if (params?.action) search.set('action', params.action)
     if (params?.userId) search.set('userId', params.userId)
+    if (params?.from) search.set('from', params.from)
+    if (params?.to) search.set('to', params.to)
     if (params?.limit) search.set('limit', String(params.limit))
     const qs = search.toString()
     return apiFetch<AuditLogApi[]>(`/api/auditoria${qs ? `?${qs}` : ''}`)
