@@ -49,6 +49,7 @@ function createPrismaClient() {
     operation: 'create' | 'update' | 'delete',
     args: { data?: unknown; where?: unknown },
     result: { id?: string },
+    previousData?: Record<string, unknown>,
   ) {
     const entity = AUDITED_MODELS[model]
     if (!entity) return
@@ -57,7 +58,17 @@ function createPrismaClient() {
 
     const entityId = String(result?.id ?? (args?.where as Record<string, unknown>)?.id ?? '')
     const action = resolveAction(operation, args?.data as Record<string, unknown> | undefined)
-    const details = operation === 'delete' ? undefined : sanitizeDetails(args?.data)
+
+    let details: Record<string, unknown> | undefined
+    if (operation === 'delete') {
+      details = sanitizeDetails(result)
+    } else if (operation === 'update') {
+      const before = sanitizeDetails(previousData)
+      const after = sanitizeDetails(args?.data)
+      details = before || after ? { ...(before && { before }), ...(after && { after }) } : undefined
+    } else {
+      details = sanitizeDetails(args?.data)
+    }
 
     base.auditLog.create({
       data: { userId, action, entity, entityId, details: details as Prisma.InputJsonValue | undefined },
@@ -75,13 +86,33 @@ function createPrismaClient() {
           return result
         },
         async update({ model, args, query }) {
+          let previousData: Record<string, unknown> | undefined
+          if (AUDITED_MODELS[model] && args.where) {
+            try {
+              const delegate = (base as Record<string, any>)[model.charAt(0).toLowerCase() + model.slice(1)]
+              const existing = await delegate.findUnique({ where: args.where })
+              if (existing) previousData = existing as Record<string, unknown>
+            } catch {
+              // Continue without previous data
+            }
+          }
           const result = await query(args)
-          autoAudit(model, 'update', args, result)
+          autoAudit(model, 'update', args, result, previousData)
           return result
         },
         async delete({ model, args, query }) {
+          let previousData: Record<string, unknown> | undefined
+          if (AUDITED_MODELS[model] && args.where) {
+            try {
+              const delegate = (base as Record<string, any>)[model.charAt(0).toLowerCase() + model.slice(1)]
+              const existing = await delegate.findUnique({ where: args.where })
+              if (existing) previousData = existing as Record<string, unknown>
+            } catch {
+              // Continue without previous data
+            }
+          }
           const result = await query(args)
-          autoAudit(model, 'delete', args, result)
+          autoAudit(model, 'delete', args, result, previousData)
           return result
         },
       },

@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/nextjs'
 import { requireAuth, isUser, getUnidadeIdOrGlobal, requireUnidadeAccessOrGlobal } from '@/lib/auth-helpers'
 import { getDashboardData } from '@/lib/dashboard-data'
 import { generateReport } from '@/lib/report-generator'
+import { nowSP } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
   const user = await requireAuth(request)
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
     const data = await getDashboardData(undefined, unidadeId ?? undefined, dateRange)
     const buffer = await generateReport(data)
 
-    const now = new Date()
+    const now = nowSP()
     const month = String(now.getMonth() + 1).padStart(2, '0')
     const year = now.getFullYear()
     const suffix = dateRange

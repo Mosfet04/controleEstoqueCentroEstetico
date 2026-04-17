@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs'
 import type { DashboardApi } from '@/lib/api'
+import { nowSP, SP_TIMEZONE } from '@/lib/utils'
 
 const TIPO_SAIDA_LABELS: Record<string, string> = {
   uso: 'Uso Clínico',
@@ -45,7 +46,7 @@ function autoFitColumns(sheet: ExcelJS.Worksheet) {
 export async function generateReport(data: DashboardApi): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook()
   workbook.creator = 'Stock Beauty Clinic'
-  workbook.created = new Date()
+  workbook.created = nowSP()
 
   // --- Resumo ---
   const resumo = workbook.addWorksheet('Resumo')
@@ -181,7 +182,7 @@ export async function generateReport(data: DashboardApi): Promise<Buffer> {
   data.vencendo60.forEach((v) => {
     vencSheet.addRow({
       nome: v.nome,
-      dataVencimento: new Date(v.dataVencimento).toLocaleDateString('pt-BR'),
+      dataVencimento: new Date(v.dataVencimento).toLocaleDateString('pt-BR', { timeZone: SP_TIMEZONE }),
       status: STATUS_LABELS[v.status] ?? v.status,
     })
   })
@@ -222,7 +223,7 @@ export async function generateReport(data: DashboardApi): Promise<Buffer> {
       responsavel: a.responsavel,
       tipo: TIPO_SAIDA_LABELS[a.tipo] ?? a.tipo,
       quantidade: a.quantidade,
-      dataRetirada: new Date(a.dataRetirada).toLocaleString('pt-BR'),
+      dataRetirada: new Date(a.dataRetirada).toLocaleString('pt-BR', { timeZone: SP_TIMEZONE }),
     })
   })
   autoFitColumns(ativSheet)

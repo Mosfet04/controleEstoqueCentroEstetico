@@ -1,4 +1,5 @@
 import { Insumo } from '@prisma/client'
+import { nowSP } from '@/lib/utils'
 
 export type StatusEstoque = 'bom' | 'atencao' | 'critico'
 
@@ -11,7 +12,7 @@ export function calcularStatus(
   quantidadeMinima: number,
   dataVencimento: Date
 ): StatusEstoque {
-  const hoje = new Date()
+  const hoje = nowSP()
   const diasParaVencer = Math.ceil(
     (dataVencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
   )

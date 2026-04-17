@@ -25,6 +25,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
+import { toSP, nowSP } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
@@ -69,7 +70,7 @@ export default function AuditoriaPage() {
   const [entityFilter, setEntityFilter] = useState<string>('all')
   const [actionFilter, setActionFilter] = useState<string>('all')
 
-  const now = new Date()
+  const now = nowSP()
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(now), 'yyyy-MM-dd'))
   const [dateTo, setDateTo] = useState(format(endOfMonth(now), 'yyyy-MM-dd'))
   const [appliedFrom, setAppliedFrom] = useState(dateFrom)
@@ -201,7 +202,7 @@ export default function AuditoriaPage() {
                   logs.map((log) => (
                     <TableRow key={log.id}>
                       <TableCell className="whitespace-nowrap text-sm">
-                        {format(new Date(log.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                        {format(toSP(log.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                       </TableCell>
                       <TableCell>
                         <div>

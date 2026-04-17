@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getDashboardData } from '@/lib/dashboard-data'
 import { generateReport } from '@/lib/report-generator'
 import { sendReportEmail } from '@/lib/email'
+import { nowSP } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Cron runs on day 1 — report covers the previous (just-completed) month
-    const now = new Date()
+    const now = nowSP()
     const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     const month = String(prevMonth.getMonth() + 1).padStart(2, '0')
     const year = prevMonth.getFullYear()

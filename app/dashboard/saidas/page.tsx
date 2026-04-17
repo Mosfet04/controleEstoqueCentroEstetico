@@ -37,6 +37,7 @@ import { useUnidade } from '@/contexts/unidade-context'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
+import { toSP } from '@/lib/utils'
 
 interface SaidaFormData {
   unidadeId: string
@@ -324,7 +325,7 @@ export default function SaidasPage() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Vencimento:</span>
                       <span className="font-medium">
-                        {format(new Date(selectedInsumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}
+                        {format(toSP(selectedInsumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}
                       </span>
                     </div>
                   </div>
@@ -344,6 +345,8 @@ export default function SaidasPage() {
                     required
                   />
                 </Field>
+
+
 
                 {/* Observação (sempre opcional) */}
                 <Field>
@@ -479,7 +482,7 @@ export default function SaidasPage() {
                           <TableCell className="text-muted-foreground text-sm">{saida.unidadeNome}</TableCell>
                         )}
                         <TableCell className="whitespace-nowrap">
-                          {format(new Date(saida.dataRetirada), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          {format(toSP(saida.dataRetirada), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                         </TableCell>
                         <TableCell className="text-muted-foreground text-sm">
                           {saida.motivo && (

@@ -11,6 +11,7 @@ import { format, differenceInDays, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { AlertTriangle, Clock, TrendingUp, Package, Trash2, SlidersHorizontal, Users, Activity, XCircle, Download, Loader2, CalendarIcon, Building2, Gauge } from 'lucide-react'
 import { toast } from 'sonner'
+import { toSP, nowSP } from '@/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useUnidade } from '@/contexts/unidade-context'
 
@@ -76,7 +77,7 @@ export default function RelatoriosPage() {
   const [isDownloading, setIsDownloading] = useState(false)
   const { unidadeAtiva } = useUnidade()
 
-  const now = new Date()
+  const now = nowSP()
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(now), 'yyyy-MM-dd'))
   const [dateTo, setDateTo] = useState(format(endOfMonth(now), 'yyyy-MM-dd'))
   const [appliedFrom, setAppliedFrom] = useState(dateFrom)
@@ -613,7 +614,7 @@ export default function RelatoriosPage() {
                   </Badge>
                   <span className="text-sm font-medium tabular-nums">{a.quantidade} un.</span>
                   <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {format(new Date(a.dataRetirada), "dd/MM HH:mm", { locale: ptBR })}
+                    {format(toSP(a.dataRetirada), "dd/MM HH:mm", { locale: ptBR })}
                   </span>
                 </div>
               ))}
@@ -639,7 +640,7 @@ export default function RelatoriosPage() {
             ) : (
               <div className="space-y-3">
                 {vencendo.map((insumo) => {
-                  const dias = differenceInDays(new Date(insumo.dataVencimento), new Date())
+                  const dias = differenceInDays(toSP(insumo.dataVencimento), nowSP())
                   return (
                     <div key={insumo.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                       <div>
@@ -650,7 +651,7 @@ export default function RelatoriosPage() {
                           {dias} {dias === 1 ? 'dia' : 'dias'}
                         </Badge>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {format(new Date(insumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}
+                          {format(toSP(insumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}
                         </p>
                       </div>
                     </div>

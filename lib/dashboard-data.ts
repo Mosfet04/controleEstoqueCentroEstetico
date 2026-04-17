@@ -1,9 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import { calcularStatus } from '@/lib/insumo-utils'
+import { nowSP } from '@/lib/utils'
 import type { DashboardApi } from '@/lib/api'
 
 export async function getDashboardData(referenceDate?: Date, unidadeId?: string, dateRange?: { from: Date; to: Date }): Promise<DashboardApi> {
-  const now = new Date()
+  const now = nowSP()
   const ref = referenceDate ?? now
   const startOfMonth = dateRange?.from ?? new Date(ref.getFullYear(), ref.getMonth(), 1)
   const endOfMonth = dateRange?.to ?? new Date(ref.getFullYear(), ref.getMonth() + 1, 0, 23, 59, 59)

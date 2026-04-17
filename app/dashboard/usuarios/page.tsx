@@ -46,6 +46,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
+import { toSP } from '@/lib/utils'
 
 type UserRole = 'admin' | 'clinico'
 
@@ -379,7 +380,7 @@ export default function UsuariosPage() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>{format(new Date(user.createdAt), "dd/MM/yyyy", { locale: ptBR })}</TableCell>
+                    <TableCell>{format(toSP(user.createdAt), "dd/MM/yyyy", { locale: ptBR })}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         {user.ativo === false ? (

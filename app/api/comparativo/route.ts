@@ -3,13 +3,14 @@ import * as Sentry from '@sentry/nextjs'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin, isUser } from '@/lib/auth-helpers'
 import { calcularStatus } from '@/lib/insumo-utils'
+import { nowSP } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
   const admin = await requireAdmin(request)
   if (!isUser(admin)) return admin
 
   try {
-    const now = new Date()
+    const now = nowSP()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
     const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)

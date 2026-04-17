@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth, isUser, getUnidadeIdOrGlobal, requireUnidadeAccessOrGlobal } from '@/lib/auth-helpers'
 import { saidaSchema } from '@/lib/validations'
 import { withAuditContext } from '@/lib/audit-context'
+import { nowSP } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
   const user = await requireAuth(request)
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
             tipo: tipo ?? 'uso',
             motivo: motivo ?? null,
             observacao: observacao ?? null,
-            dataRetirada: new Date(),
+            dataRetirada: nowSP(),
           },
           include: {
             insumo: { select: { nome: true, lote: true } },

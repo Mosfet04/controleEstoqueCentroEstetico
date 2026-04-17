@@ -60,6 +60,7 @@ const STATUS_LABELS: Record<StatusEstoque, string> = {
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
+import { toSP, nowSP } from '@/lib/utils'
 
 function StatusBadge({ status }: { status: StatusEstoque }) {
   const variants: Record<StatusEstoque, { className: string }> = {
@@ -99,7 +100,7 @@ const initialFormData: InsumoFormData = {
   fornecedor: '',
   quantidade: 0,
   quantidadeMinima: 0,
-  dataEntrada: new Date().toISOString().split('T')[0],
+  dataEntrada: format(nowSP(), 'yyyy-MM-dd'),
   dataVencimento: '',
 }
 
@@ -150,8 +151,8 @@ export default function InsumosPage() {
         fornecedor: insumo.fornecedor,
         quantidade: insumo.quantidade,
         quantidadeMinima: insumo.quantidadeMinima,
-        dataEntrada: format(new Date(insumo.dataEntrada), 'yyyy-MM-dd'),
-        dataVencimento: format(new Date(insumo.dataVencimento), 'yyyy-MM-dd'),
+        dataEntrada: format(toSP(insumo.dataEntrada), 'yyyy-MM-dd'),
+        dataVencimento: format(toSP(insumo.dataVencimento), 'yyyy-MM-dd'),
       })
     } else {
       setEditingInsumo(null)
@@ -437,7 +438,7 @@ export default function InsumosPage() {
                       <TableCell><TipoBadge tipo={insumo.tipo} /></TableCell>
                       <TableCell>{insumo.fornecedor}</TableCell>
                       <TableCell className="text-center font-semibold">{insumo.quantidade}</TableCell>
-                      <TableCell>{format(new Date(insumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
+                      <TableCell>{format(toSP(insumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
                       <TableCell><StatusBadge status={insumo.status} /></TableCell>
                       {!isGlobalView && (
                         <TableCell className="text-right">
