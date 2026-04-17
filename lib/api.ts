@@ -332,10 +332,10 @@ export interface FornecedorComparativo {
 }
 
 export const fornecedoresApi = {
-  compare: (params?: { produto?: string; fornecedor?: string; from?: string; to?: string }) => {
+  compare: (params?: { produto?: string[]; fornecedor?: string[]; from?: string; to?: string }) => {
     const search = new URLSearchParams()
-    if (params?.produto) search.set('produto', params.produto)
-    if (params?.fornecedor) search.set('fornecedor', params.fornecedor)
+    if (params?.produto?.length) search.set('produto', params.produto.join(','))
+    if (params?.fornecedor?.length) search.set('fornecedor', params.fornecedor.join(','))
     if (params?.from) search.set('from', params.from)
     if (params?.to) search.set('to', params.to)
     const qs = search.toString()

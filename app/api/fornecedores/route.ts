@@ -9,8 +9,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const { searchParams } = request.nextUrl
-    const produto = searchParams.get('produto')?.trim()
-    const fornecedor = searchParams.get('fornecedor')?.trim()
+    const produtos = searchParams.get('produto')?.split(',').map((s) => s.trim()).filter(Boolean)
+    const fornecedoresParam = searchParams.get('fornecedor')?.split(',').map((s) => s.trim()).filter(Boolean)
     const from = searchParams.get('from')
     const to = searchParams.get('to')
 
@@ -18,11 +18,11 @@ export async function GET(request: NextRequest) {
       precoUnitario: { not: null },
     }
 
-    if (produto) {
-      where.nome = { contains: produto, mode: 'insensitive' }
+    if (produtos && produtos.length > 0) {
+      where.nome = { in: produtos }
     }
-    if (fornecedor) {
-      where.fornecedor = { contains: fornecedor, mode: 'insensitive' }
+    if (fornecedoresParam && fornecedoresParam.length > 0) {
+      where.fornecedor = { in: fornecedoresParam }
     }
     if (from || to) {
       const dateFilter: Record<string, Date> = {}

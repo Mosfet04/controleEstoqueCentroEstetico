@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   Table,
   TableBody,
@@ -12,20 +13,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { Checkbox } from '@/components/ui/checkbox'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
-import { Search, TrendingDown, TrendingUp, DollarSign, Store } from 'lucide-react'
+import { TrendingDown, TrendingUp, DollarSign, Store, ChevronsUpDown, Check } from 'lucide-react'
 import { fornecedoresApi, FornecedorComparativo, ApiError } from '@/lib/api'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
-import { toSP, nowSP } from '@/lib/utils'
+import { toSP } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import {
   Bar,
   BarChart,
@@ -43,24 +41,107 @@ const TIPO_LABELS: Record<string, string> = {
   peeling: 'Peeling',
 }
 
+function MultiSelect({
+  options,
+  selected,
+  onChange,
+  placeholder,
+  disabled,
+}: {
+  options: string[]
+  selected: string[]
+  onChange: (values: string[]) => void
+  placeholder: string
+  disabled?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+
+  const toggle = (value: string) => {
+    onChange(
+      selected.includes(value)
+        ? selected.filter((s) => s !== value)
+        : [...selected, value]
+    )
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className="w-full justify-between font-normal"
+        >
+          <span className="truncate">
+            {selected.length === 0
+              ? placeholder
+              : selected.length === 1
+                ? selected[0]
+                : `${selected.length} selecionado(s)`}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Buscar..." />
+          <CommandList>
+            <CommandEmpty>Nenhum resultado.</CommandEmpty>
+            <CommandGroup>
+              {options.map((option) => (
+                <CommandItem
+                  key={option}
+                  value={option}
+                  onSelect={() => toggle(option)}
+                >
+                  <Checkbox
+                    checked={selected.includes(option)}
+                    className="mr-2"
+                  />
+                  {option}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 export default function FornecedoresPage() {
   const [data, setData] = useState<FornecedorComparativo[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filterProduto, setFilterProduto] = useState('')
-  const [filterFornecedor, setFilterFornecedor] = useState('')
+  const [allData, setAllData] = useState<FornecedorComparativo[]>([])
+  const [loading, setLoading] = useState(false)
+  const [filterProdutos, setFilterProdutos] = useState<string[]>([])
+  const [filterFornecedores, setFilterFornecedores] = useState<string[]>([])
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
 
-  const loadData = async () => {
+  const datesReady = filterFrom !== '' && filterTo !== ''
+
+  // Fetch all data for the date range (no product/supplier filter)
+  const loadAllData = useCallback(async () => {
+    if (!datesReady) {
+      setAllData([])
+      setData([])
+      setFilterProdutos([])
+      setFilterFornecedores([])
+      return
+    }
+
     setLoading(true)
     try {
-      const params: Record<string, string> = {}
-      if (filterProduto) params.produto = filterProduto
-      if (filterFornecedor) params.fornecedor = filterFornecedor
-      if (filterFrom) params.from = new Date(filterFrom).toISOString()
-      if (filterTo) params.to = new Date(filterTo).toISOString()
-      const result = await fornecedoresApi.compare(params)
+      const result = await fornecedoresApi.compare({
+        from: new Date(filterFrom).toISOString(),
+        to: new Date(filterTo).toISOString(),
+      })
+      setAllData(result)
       setData(result)
+      setFilterProdutos([])
+      setFilterFornecedores([])
     } catch (err) {
       if (err instanceof ApiError && err.status !== 401) {
         toast.error('Erro ao carregar dados de fornecedores')
@@ -68,13 +149,38 @@ export default function FornecedoresPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [filterFrom, filterTo, datesReady])
 
   useEffect(() => {
-    loadData()
-  }, [filterProduto, filterFornecedor, filterFrom, filterTo])
+    loadAllData()
+  }, [loadAllData])
 
-  // Unique products for chart grouping
+  // Apply client-side filters for product/supplier selections
+  useEffect(() => {
+    if (!datesReady) return
+
+    let filtered = allData
+    if (filterProdutos.length > 0) {
+      filtered = filtered.filter((d) => filterProdutos.includes(d.produto))
+    }
+    if (filterFornecedores.length > 0) {
+      filtered = filtered.filter((d) => filterFornecedores.includes(d.fornecedor))
+    }
+    setData(filtered)
+  }, [filterProdutos, filterFornecedores, allData, datesReady])
+
+  // Available options from allData (unfiltered for the date range)
+  const availableProdutos = useMemo(
+    () => [...new Set(allData.map((d) => d.produto))].sort(),
+    [allData]
+  )
+
+  const availableFornecedores = useMemo(
+    () => [...new Set(allData.map((d) => d.fornecedor))].sort(),
+    [allData]
+  )
+
+  // Unique products for chart grouping from filtered data
   const produtos = useMemo(
     () => [...new Set(data.map((d) => d.produto))].sort(),
     [data]
@@ -171,28 +277,14 @@ export default function FornecedoresPage() {
 
       {/* Filters */}
       <Card>
-        <CardContent className="p-4">
+        <CardHeader>
+          <CardTitle>Filtros</CardTitle>
+          <CardDescription>Selecione o período para habilitar os filtros de produto e fornecedor</CardDescription>
+        </CardHeader>
+        <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Filtrar por produto..."
-                value={filterProduto}
-                onChange={(e) => setFilterProduto(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <div className="relative">
-              <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Filtrar por fornecedor..."
-                value={filterFornecedor}
-                onChange={(e) => setFilterFornecedor(e.target.value)}
-                className="pl-10"
-              />
-            </div>
             <Field>
-              <FieldLabel>Data Início</FieldLabel>
+              <FieldLabel>Data Início <span className="text-destructive">*</span></FieldLabel>
               <Input
                 type="date"
                 value={filterFrom}
@@ -200,14 +292,39 @@ export default function FornecedoresPage() {
               />
             </Field>
             <Field>
-              <FieldLabel>Data Fim</FieldLabel>
+              <FieldLabel>Data Fim <span className="text-destructive">*</span></FieldLabel>
               <Input
                 type="date"
                 value={filterTo}
                 onChange={(e) => setFilterTo(e.target.value)}
               />
             </Field>
+            <Field>
+              <FieldLabel>Produtos</FieldLabel>
+              <MultiSelect
+                options={availableProdutos}
+                selected={filterProdutos}
+                onChange={setFilterProdutos}
+                placeholder="Todos os produtos"
+                disabled={!datesReady}
+              />
+            </Field>
+            <Field>
+              <FieldLabel>Fornecedores</FieldLabel>
+              <MultiSelect
+                options={availableFornecedores}
+                selected={filterFornecedores}
+                onChange={setFilterFornecedores}
+                placeholder="Todos os fornecedores"
+                disabled={!datesReady}
+              />
+            </Field>
           </div>
+          {!datesReady && (
+            <p className="text-sm text-muted-foreground mt-3">
+              Preencha as datas de início e fim para visualizar os dados e habilitar os filtros.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -267,7 +384,7 @@ export default function FornecedoresPage() {
                 {data.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                      {loading ? 'Carregando...' : 'Nenhum dado encontrado. Cadastre insumos com preço unitário.'}
+                      {loading ? 'Carregando...' : !datesReady ? 'Selecione o período para visualizar os dados.' : 'Nenhum dado encontrado. Cadastre insumos com preço unitário.'}
                     </TableCell>
                   </TableRow>
                 ) : (
