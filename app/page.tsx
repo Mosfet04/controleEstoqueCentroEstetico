@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail, AuthError } from 'firebase/auth'
+import { signInWithEmailAndPassword, signInWithPopup, linkWithCredential, GoogleAuthProvider, sendPasswordResetEmail, AuthError, OAuthCredential } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -29,6 +29,8 @@ function getFirebaseErrorMessage(code: string): string {
       return 'Login com Google cancelado'
     case 'auth/popup-blocked':
       return 'Popup bloqueado pelo navegador. Permita popups para este site'
+    case 'auth/account-exists-with-different-credential':
+      return 'Este e-mail já possui login com senha. Entre com sua senha para vincular o Google'
     default:
       return 'Erro ao entrar. Tente novamente'
   }
@@ -56,6 +58,7 @@ export default function LoginPage() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [isResetLoading, setIsResetLoading] = useState(false)
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
+  const [pendingGoogleCredential, setPendingGoogleCredential] = useState<OAuthCredential | null>(null)
 
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {}
@@ -86,6 +89,12 @@ export default function LoginPage() {
 
     try {
       const credential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password)
+
+      if (pendingGoogleCredential) {
+        await linkWithCredential(credential.user, pendingGoogleCredential)
+        setPendingGoogleCredential(null)
+      }
+
       const idToken = await credential.user.getIdToken()
       const appUser = await exchangeFirebaseToken(idToken)
       toast.success(`Bem-vindo(a), ${appUser.name}!`)
@@ -111,12 +120,21 @@ export default function LoginPage() {
       toast.success(`Bem-vindo(a), ${appUser.name}!`)
       router.push('/dashboard')
     } catch (err) {
-      const message = err instanceof Error
-        ? err.message
-        : getFirebaseErrorMessage((err as AuthError)?.code ?? '')
-      // Não mostra erro se o usuário apenas fechou o popup
-      const code = (err as AuthError)?.code ?? ''
-      if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
+      const authError = err as AuthError
+      const code = authError?.code ?? ''
+
+      if (code === 'auth/account-exists-with-different-credential') {
+        const googleCredential = GoogleAuthProvider.credentialFromError(authError)
+        const emailFromError = authError.customData?.email as string | undefined
+        if (googleCredential) {
+          setPendingGoogleCredential(googleCredential)
+          if (emailFromError) setEmail(emailFromError)
+          toast.info('Este e-mail já possui login com senha. Digite sua senha abaixo para vincular sua conta Google.')
+        }
+      } else if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
+        const message = err instanceof Error
+          ? err.message
+          : getFirebaseErrorMessage(code)
         toast.error(message)
       }
     } finally {
@@ -174,6 +192,11 @@ export default function LoginPage() {
             <CardDescription>Digite suas credenciais para acessar o sistema</CardDescription>
           </CardHeader>
           <CardContent>
+            {pendingGoogleCredential && (
+              <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                <strong>Vincular conta Google:</strong> Digite sua senha atual para confirmar a vinculação.
+              </div>
+            )}
             <form onSubmit={handleSubmit}>
               <FieldGroup>
                 <Field>
