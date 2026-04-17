@@ -63,6 +63,7 @@ model Insumo {
   fornecedor       String
   quantidade       Int
   quantidadeMinima Int
+  precoUnitario    Decimal?   @db.Decimal(10, 2)
   dataEntrada      DateTime
   dataVencimento   DateTime
   unidadeId        String
@@ -75,6 +76,9 @@ model Insumo {
   @@index([tipo])
   @@index([dataVencimento])
   @@index([unidadeId])
+  @@index([fornecedor])
+  @@index([nome])
+  @@index([dataEntrada])
 }
 
 model SaidaInsumo {

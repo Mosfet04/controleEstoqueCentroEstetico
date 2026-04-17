@@ -81,6 +81,7 @@ export interface InsumoApi {
   fornecedor: string
   quantidade: number
   quantidadeMinima: number
+  precoUnitario?: number | null
   dataEntrada: string
   dataVencimento: string
   status: 'bom' | 'atencao' | 'critico'
@@ -97,6 +98,7 @@ export interface InsumoPayload {
   fornecedor: string
   quantidade: number
   quantidadeMinima: number
+  precoUnitario?: number
   dataEntrada: string
   dataVencimento: string
 }
@@ -312,4 +314,31 @@ export interface PrevisaoItem {
 
 export const previsaoApi = {
   list: () => apiFetch<PrevisaoItem[]>('/api/previsao'),
+}
+
+// ---------------------------------------------------------------------------
+// Comparativo de Fornecedores
+// ---------------------------------------------------------------------------
+
+export interface FornecedorComparativo {
+  fornecedor: string
+  produto: string
+  tipo: string
+  entradas: number
+  precoMedio: number | null
+  precoMinimo: number | null
+  precoMaximo: number | null
+  ultimaEntrada: string | null
+}
+
+export const fornecedoresApi = {
+  compare: (params?: { produto?: string; fornecedor?: string; from?: string; to?: string }) => {
+    const search = new URLSearchParams()
+    if (params?.produto) search.set('produto', params.produto)
+    if (params?.fornecedor) search.set('fornecedor', params.fornecedor)
+    if (params?.from) search.set('from', params.from)
+    if (params?.to) search.set('to', params.to)
+    const qs = search.toString()
+    return apiFetch<FornecedorComparativo[]>(`/api/fornecedores${qs ? `?${qs}` : ''}`)
+  },
 }

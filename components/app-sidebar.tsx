@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Globe,
   ClipboardList,
+  Store,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
@@ -28,6 +29,7 @@ const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/insumos', label: 'Insumos', icon: Package },
   { href: '/dashboard/saidas', label: 'Saídas', icon: PackageMinus },
+  { href: '/dashboard/fornecedores', label: 'Fornecedores', icon: Store },
   { href: '/dashboard/relatorios', label: 'Relatórios', icon: BarChart3 },
 ]
 

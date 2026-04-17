@@ -88,6 +88,7 @@ interface InsumoFormData {
   fornecedor: string
   quantidade: number
   quantidadeMinima: number
+  precoUnitario: string
   dataEntrada: string
   dataVencimento: string
 }
@@ -100,6 +101,7 @@ const initialFormData: InsumoFormData = {
   fornecedor: '',
   quantidade: 0,
   quantidadeMinima: 0,
+  precoUnitario: '',
   dataEntrada: format(nowSP(), 'yyyy-MM-dd'),
   dataVencimento: '',
 }
@@ -151,6 +153,7 @@ export default function InsumosPage() {
         fornecedor: insumo.fornecedor,
         quantidade: insumo.quantidade,
         quantidadeMinima: insumo.quantidadeMinima,
+        precoUnitario: insumo.precoUnitario != null ? String(insumo.precoUnitario) : '',
         dataEntrada: format(toSP(insumo.dataEntrada), 'yyyy-MM-dd'),
         dataVencimento: format(toSP(insumo.dataVencimento), 'yyyy-MM-dd'),
       })
@@ -179,6 +182,7 @@ export default function InsumosPage() {
       fornecedor: formData.fornecedor,
       quantidade: formData.quantidade,
       quantidadeMinima: formData.quantidadeMinima,
+      ...(formData.precoUnitario ? { precoUnitario: parseFloat(formData.precoUnitario) } : {}),
       dataEntrada: new Date(formData.dataEntrada).toISOString(),
       dataVencimento: new Date(formData.dataVencimento).toISOString(),
     }
@@ -325,6 +329,18 @@ export default function InsumosPage() {
                     />
                   </Field>
                 </div>
+                <Field>
+                  <FieldLabel>Preço Unitário (R$)</FieldLabel>
+                  <Input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={formData.precoUnitario}
+                    onChange={(e) => setFormData({ ...formData, precoUnitario: e.target.value })}
+                    placeholder="0,00"
+                  />
+                  <p className="text-xs text-muted-foreground">Informe o valor de cada unidade, não o total do lote</p>
+                </Field>
                 <div className="grid grid-cols-2 gap-4">
                   <Field>
                     <FieldLabel>Data de Entrada</FieldLabel>
@@ -415,6 +431,7 @@ export default function InsumosPage() {
                   <TableHead>Tipo</TableHead>
                   <TableHead>Fornecedor</TableHead>
                   <TableHead className="text-center">Qtd.</TableHead>
+                  <TableHead className="text-right">Preço Unit.</TableHead>
                   <TableHead>Vencimento</TableHead>
                   <TableHead>Status</TableHead>
                   {!isGlobalView && <TableHead className="text-right">Ações</TableHead>}
@@ -423,7 +440,7 @@ export default function InsumosPage() {
               <TableBody>
                 {filteredInsumos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isGlobalView ? 8 : 8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={isGlobalView ? 9 : 9} className="text-center py-8 text-muted-foreground">
                       Nenhum insumo encontrado
                     </TableCell>
                   </TableRow>
@@ -438,6 +455,11 @@ export default function InsumosPage() {
                       <TableCell><TipoBadge tipo={insumo.tipo} /></TableCell>
                       <TableCell>{insumo.fornecedor}</TableCell>
                       <TableCell className="text-center font-semibold">{insumo.quantidade}</TableCell>
+                      <TableCell className="text-right">
+                        {insumo.precoUnitario != null
+                          ? `R$ ${Number(insumo.precoUnitario).toFixed(2)}`
+                          : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
                       <TableCell>{format(toSP(insumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
                       <TableCell><StatusBadge status={insumo.status} /></TableCell>
                       {!isGlobalView && (
