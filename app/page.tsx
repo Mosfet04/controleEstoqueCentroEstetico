@@ -100,9 +100,8 @@ export default function LoginPage() {
       toast.success(`Bem-vindo(a), ${appUser.name}!`)
       router.push('/dashboard')
     } catch (err) {
-      const message = err instanceof Error
-        ? err.message
-        : getFirebaseErrorMessage((err as AuthError)?.code ?? '')
+      const code = (err as AuthError)?.code ?? ''
+      const message = code ? getFirebaseErrorMessage(code) : (err instanceof Error ? err.message : 'Erro ao entrar. Tente novamente')
       toast.error(message)
       setErrors({ password: message })
     } finally {
