@@ -39,6 +39,7 @@ Aplicação web completa para gestão de estoque de insumos em clínicas estéti
 - [Painel Principal (Dashboard)](#painel-principal-dashboard)
 - [Gerenciamento de Insumos](#gerenciamento-de-insumos)
 - [Registro de Saídas](#registro-de-saídas)
+- [Comparativo de Fornecedores](#comparativo-de-fornecedores)
 - [Relatórios](#relatórios)
 - [Administração: Usuários](#administração-usuários)
 - [Administração: Unidades](#administração-unidades)
@@ -196,6 +197,7 @@ Acesse [http://localhost:3000](http://localhost:3000) e faça login com as crede
 │   │   ├── dashboard/           # Métricas do dashboard
 │   │   ├── relatorios/          # Exportação de relatórios XLSX
 │   │   ├── comparativo/         # Comparativo entre unidades
+│   │   ├── fornecedores/        # Comparativo de preços entre fornecedores
 │   │   ├── previsao/            # Previsão de consumo
 │   │   ├── auditoria/           # Logs de auditoria
 │   │   └── cron/                # Tarefas agendadas (relatório mensal)
@@ -203,6 +205,7 @@ Acesse [http://localhost:3000](http://localhost:3000) e faça login com as crede
 │       ├── page.tsx             # Dashboard principal
 │       ├── insumos/             # Gestão de insumos
 │       ├── saidas/              # Registro de saídas
+│       ├── fornecedores/        # Comparativo de preços por fornecedor
 │       ├── relatorios/          # Relatórios e gráficos
 │       ├── usuarios/            # Gestão de usuários (admin)
 │       ├── unidades/            # Gestão de unidades (admin)
@@ -273,7 +276,8 @@ O banco utiliza **PostgreSQL** com **Prisma ORM**. O schema define 5 modelos e 3
 │ fornecedor       │      │ entity       │
 │ quantidade       │      │ entityId     │
 │ quantidadeMinima │      │ details      │
-│ dataVencimento   │      └──────────────┘
+│ precoUnitario    │      └──────────────┘
+│ dataVencimento   │
 └────────┬─────────┘
          │
          │ 1:N
@@ -290,7 +294,7 @@ O banco utiliza **PostgreSQL** com **Prisma ORM**. O schema define 5 modelos e 3
 
 - **Unidade** — Unidade/filial da clínica. Relaciona-se M:N com User e 1:N com Insumo e SaidaInsumo.
 - **User** — Usuário do sistema com vínculo ao Firebase Auth via `firebaseUid`. Pode estar em múltiplas unidades.
-- **Insumo** — Item de estoque (produto). Contém lote, validade, quantidade e quantidade mínima.
+- **Insumo** — Item de estoque (produto). Contém lote, validade, quantidade, quantidade mínima e preço unitário (opcional, para comparação entre fornecedores).
 - **SaidaInsumo** — Registro de movimentação (uso clínico, descarte ou ajuste). Referencia o insumo, o usuário responsável e a unidade.
 - **AuditLog** — Trilha de auditoria automática. Registra ações (CREATE, UPDATE, DELETE, DEACTIVATE, REACTIVATE) com detalhes em JSON.
 
@@ -347,6 +351,7 @@ O banco utiliza **PostgreSQL** com **Prisma ORM**. O schema define 5 modelos e 3
 | GET | `/api/dashboard` | Autenticado | Métricas completas (KPIs, distribuições, top itens, alertas) |
 | GET | `/api/relatorios/export` | Autenticado | Exporta relatório XLSX com 9 abas |
 | GET | `/api/comparativo` | Admin | Comparativo cross-unidade |
+| GET | `/api/fornecedores` | Autenticado | Comparativo de preços por fornecedor/produto (filtros: `produto`, `fornecedor`, `from`, `to`) |
 | GET | `/api/previsao` | Autenticado | Previsão de consumo (média 90 dias → dias restantes) |
 | GET | `/api/auditoria` | Admin | Logs de auditoria com filtros |
 
@@ -383,7 +388,7 @@ Browser                           Server
 
 | Papel | Acesso |
 | --- | --- |
-| `admin` | Acesso total: todas as unidades, gestão de usuários, unidades, auditoria, comparativo |
+| `admin` | Acesso total: todas as unidades, gestão de usuários, unidades, auditoria, comparativo, fornecedores |
 | `clinico` | Acesso restrito às unidades vinculadas. Pode visualizar/registrar insumos e saídas, ver relatórios |
 
 ### Controle de Acesso por Unidade
@@ -524,7 +529,7 @@ Acesse pelo menu lateral: **Insumos**
 
 ### Visualização
 
-A tela exibe uma tabela com todos os insumos da unidade selecionada, incluindo: nome, lote, tipo, fornecedor, quantidade atual, quantidade mínima, datas de entrada e vencimento.
+A tela exibe uma tabela com todos os insumos da unidade selecionada, incluindo: nome, lote, tipo, fornecedor, quantidade atual, preço unitário, datas de entrada e vencimento.
 
 ### Indicador de Status
 
@@ -553,6 +558,7 @@ Cada insumo recebe automaticamente um dos três status:
    - **Fornecedor** — Nome do fornecedor
    - **Quantidade** — Quantidade em estoque
    - **Quantidade Mínima** — Quantidade que aciona o alerta de reposição
+   - **Preço Unitário (R$)** — Valor de cada unidade do produto, não o total do lote (opcional, usado no comparativo de fornecedores)
    - **Data de Entrada** — Data de recebimento
    - **Data de Vencimento** — Validade do produto (obrigatório)
 3. Clique em **Salvar**
@@ -592,6 +598,43 @@ O estoque do insumo será decrementado automaticamente. O sistema impede retirad
 ### Histórico
 
 A tabela de saídas mostra todas as movimentações com: insumo, tipo, quantidade, responsável e data. Use a busca e os filtros para encontrar registros específicos.
+
+## Comparativo de Fornecedores
+
+Acesse pelo menu lateral: **Fornecedores**
+
+Esta tela permite comparar preços unitários de insumos entre diferentes fornecedores, ajudando a identificar as melhores opções de compra.
+
+### Como Usar
+
+1. Selecione a **Data Início** e a **Data Fim** — esses campos são obrigatórios e definem o período de análise
+2. Após preencher as datas, os campos **Produtos** e **Fornecedores** são habilitados com as opções disponíveis no período
+3. Selecione um ou mais produtos e/ou fornecedores para refinar a comparação (seleção múltipla)
+4. Os resultados são atualizados automaticamente
+
+### Cards de Resumo
+
+| Card | O que mostra |
+| --- | --- |
+| **Fornecedores** | Total de fornecedores encontrados no período |
+| **Produtos com preço** | Quantidade de produtos com preço unitário cadastrado |
+| **Entradas analisadas** | Total de registros de entrada considerados na análise |
+
+### Gráfico
+
+Um gráfico de barras compara o **preço médio unitário** (R$) de cada produto entre os fornecedores do período.
+
+### Tabela de Detalhamento
+
+A tabela exibe para cada combinação fornecedor/produto:
+- **Preço Médio** — Média dos preços unitários no período
+- **Mínimo / Máximo** — Faixa de variação de preço
+- **Entradas** — Quantidade de registros analisados
+- **Última Entrada** — Data da entrada mais recente
+
+O **menor preço médio** por produto é destacado em **verde** (↓), e o maior em **vermelho** (↑).
+
+> **Importante:** Para que esta tela funcione, os insumos devem ser cadastrados com o campo **Preço Unitário** preenchido. O preço é por unidade, não o total do lote.
 
 ## Relatórios
 
