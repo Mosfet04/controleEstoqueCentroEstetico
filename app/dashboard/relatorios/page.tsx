@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,7 @@ import { toSP, nowSP } from '@/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useUnidade } from '@/contexts/unidade-context'
+import { useAuth } from '@/contexts/auth-context'
 import { COR_CHART_MAP } from '@/lib/types'
 
 type StatusEstoque = 'bom' | 'atencao' | 'critico'
@@ -55,6 +57,15 @@ const TIPO_SAIDA_COLORS: Record<string, string> = {
 
 
 export default function RelatoriosPage() {
+  const { user } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (user && user.role !== 'admin') {
+      router.replace('/dashboard')
+    }
+  }, [user, router])
+
   const [data, setData] = useState<DashboardApi | null>(null)
   const [comparativo, setComparativo] = useState<ComparativoApi | null>(null)
   const [previsao, setPrevisao] = useState<PrevisaoItem[] | null>(null)

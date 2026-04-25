@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
-import { requireAuth, isUser, getUnidadeIdOrGlobal, requireUnidadeAccessOrGlobal } from '@/lib/auth-helpers'
+import { requireAdmin, isUser, getUnidadeIdOrGlobal, requireUnidadeAccessOrGlobal } from '@/lib/auth-helpers'
 import { getDashboardData } from '@/lib/dashboard-data'
 import { generateReport } from '@/lib/report-generator'
 import { nowSP } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
-  const user = await requireAuth(request)
+  const user = await requireAdmin(request)
   if (!isUser(user)) return user
 
   const rawUnidadeId = getUnidadeIdOrGlobal(request)

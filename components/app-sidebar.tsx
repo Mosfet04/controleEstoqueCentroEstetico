@@ -31,10 +31,10 @@ const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/saidas', label: 'Saídas', icon: PackageMinus },
   { href: '/dashboard/fornecedores', label: 'Fornecedores', icon: Store },
-  { href: '/dashboard/relatorios', label: 'Relatórios', icon: BarChart3 },
 ]
 
 const adminItems = [
+  { href: '/dashboard/relatorios', label: 'Relatórios', icon: BarChart3 },
   { href: '/dashboard/usuarios', label: 'Usuários', icon: Users },
   { href: '/dashboard/unidades', label: 'Unidades', icon: Building2 },
   { href: '/dashboard/auditoria', label: 'Auditoria', icon: ClipboardList },
