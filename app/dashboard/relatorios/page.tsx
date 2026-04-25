@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import { dashboardApi, DashboardApi, comparativoApi, ComparativoApi, previsaoApi, PrevisaoItem, ApiError } from '@/lib/api'
-import { generatePdfReport } from '@/lib/pdf-generator'
 import { format, differenceInDays, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { AlertTriangle, Clock, TrendingUp, Package, Trash2, SlidersHorizontal, Users, Activity, XCircle, Download, Loader2, CalendarIcon, Building2, Gauge, FileSpreadsheet, FileText, ChevronDown } from 'lucide-react'
@@ -107,6 +106,7 @@ export default function RelatoriosPage() {
         const month = String(now.getMonth() + 1).padStart(2, '0')
         const year = now.getFullYear()
         const suffix = `${year}-${month}`
+        const { generatePdfReport } = await import('@/lib/pdf-generator')
         const arrayBuffer = generatePdfReport(data)
         const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
         const url = URL.createObjectURL(blob)
