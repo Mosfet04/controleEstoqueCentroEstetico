@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       select: {
         nome: true,
         fornecedor: true,
-        tipo: true,
+        tipoInsumo: { select: { nome: true } },
         precoUnitario: true,
         dataEntrada: true,
       },
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     const grouped = new Map<string, {
       fornecedor: string
       produto: string
-      tipo: string
+      tipoNome: string
       precos: number[]
       ultimaEntrada: Date | null
     }>()
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
         grouped.set(key, {
           fornecedor: insumo.fornecedor,
           produto: insumo.nome,
-          tipo: insumo.tipo,
+          tipoNome: insumo.tipoInsumo.nome,
           precos: [preco],
           ultimaEntrada: insumo.dataEntrada,
         })
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     const result = Array.from(grouped.values()).map((g) => ({
       fornecedor: g.fornecedor,
       produto: g.produto,
-      tipo: g.tipo,
+      tipo: g.tipoNome,
       entradas: g.precos.length,
       precoMedio: Math.round((g.precos.reduce((a, b) => a + b, 0) / g.precos.length) * 100) / 100,
       precoMinimo: Math.min(...g.precos),
