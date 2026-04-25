@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
 import { prisma } from '@/lib/prisma'
-import { requireAdmin, requireAuth, isUser } from '@/lib/auth-helpers'
+import { requireAdmin, isUser } from '@/lib/auth-helpers'
 import { createUserSchema } from '@/lib/validations'
 import { withAuditContext } from '@/lib/audit-context'
 import { getAdminAuth } from '@/lib/firebase-admin'
@@ -48,8 +48,7 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const { name, email, role, password } = parsed.data
-      const unidadeIds: string[] = Array.isArray(body.unidadeIds) ? body.unidadeIds : []
+      const { name, email, role, password, unidadeIds = [] } = parsed.data
 
       // Check if email already exists in DB before touching Firebase
       const existing = await prisma.user.findUnique({ where: { email } })

@@ -24,12 +24,19 @@ export async function POST(request: NextRequest) {
     // Ensure user exists in our DB (synced from Firebase)
     const user = await prisma.user.findUnique({
       where: { firebaseUid: decoded.uid },
-      select: { id: true, name: true, role: true, email: true },
+      select: { id: true, name: true, role: true, email: true, ativo: true },
     })
 
     if (!user) {
       return NextResponse.json(
         { error: 'Usuário não cadastrado no sistema. Contate o administrador.' },
+        { status: 403 }
+      )
+    }
+
+    if (!user.ativo) {
+      return NextResponse.json(
+        { error: 'Conta desativada. Contate o administrador.' },
         { status: 403 }
       )
     }

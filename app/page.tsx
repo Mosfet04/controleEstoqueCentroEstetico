@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, linkWithCredential, GoogleAuthProvider, sendPasswordResetEmail, AuthError, OAuthCredential } from 'firebase/auth'
+import { signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, linkWithCredential, onAuthStateChanged, GoogleAuthProvider, sendPasswordResetEmail, AuthError, OAuthCredential } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,12 +12,12 @@ import { Sparkles, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { getFirebaseAuth } from '@/lib/firebase'
 import { toast } from 'sonner'
 
-function isStandalonePWA(): boolean {
+// Returns true only on iOS Safari standalone mode (added to Home Screen).
+// navigator.standalone is a WebKit-only property — undefined on all non-iOS browsers.
+// Android Chrome standalone PWA supports popups, so we keep it on the popup flow.
+function isIosStandalonePWA(): boolean {
   if (typeof window === 'undefined') return false
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    !!(window.navigator as { standalone?: boolean }).standalone
-  )
+  return !!(window.navigator as { standalone?: boolean }).standalone
 }
 
 function getFirebaseErrorMessage(code: string): string {
@@ -80,12 +80,28 @@ export default function LoginPage() {
         router.push('/dashboard')
       } catch (err) {
         const code = (err as AuthError)?.code ?? ''
-        if (code && code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
-          toast.error(getFirebaseErrorMessage(code))
+        if (code) {
+          if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
+            toast.error(getFirebaseErrorMessage(code))
+          }
+        } else {
+          // Non-Firebase error (e.g. "Usuário não cadastrado") — show the message directly
+          toast.error(err instanceof Error ? err.message : 'Erro ao entrar. Tente novamente')
         }
       }
     }
     handleRedirectResult()
+  }, [router])
+
+  // Redirect to dashboard if the user is already authenticated
+  // (e.g. navigating back to the login page after a successful session)
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(getFirebaseAuth(), (firebaseUser) => {
+      if (firebaseUser) {
+        router.push('/dashboard')
+      }
+    })
+    return () => unsubscribe()
   }, [router])
 
   const validateForm = () => {
@@ -141,7 +157,7 @@ export default function LoginPage() {
     setIsGoogleLoading(true)
     try {
       const provider = new GoogleAuthProvider()
-      if (isStandalonePWA()) {
+      if (isIosStandalonePWA()) {
         // Popups don't work in iOS/Android standalone PWA mode:
         // the popup opens in Safari (a separate context) and the result
         // never returns to the PWA. Use redirect flow instead.

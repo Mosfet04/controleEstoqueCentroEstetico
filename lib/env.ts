@@ -21,6 +21,11 @@ const envSchema = z.object({
   // Sentry (optional in development)
   NEXT_PUBLIC_SENTRY_DSN: z.string().url('NEXT_PUBLIC_SENTRY_DSN deve ser uma URL válida').optional(),
 
+  // Internal API secret — protects /api/auth/verify from external callers.
+  // Generate with: openssl rand -hex 32
+  // Must be set in both the server and edge (middleware) environments.
+  INTERNAL_API_SECRET: z.string().min(32, 'INTERNAL_API_SECRET deve ter ao menos 32 caracteres').optional(),
+
   // App
   NEXT_PUBLIC_APP_URL: z.string().url('NEXT_PUBLIC_APP_URL deve ser uma URL válida').optional(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),

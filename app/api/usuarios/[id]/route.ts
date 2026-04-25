@@ -32,8 +32,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
         )
       }
 
-      const { name, email, role } = parsed.data
-      const unidadeIds: string[] | undefined = Array.isArray(body.unidadeIds) ? body.unidadeIds : undefined
+      const { name, email, role, unidadeIds } = parsed.data
 
       // Sync email change to Firebase Auth
       if (email && email !== existing.email) {
@@ -99,6 +98,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
         await Promise.all([
           prisma.user.update({ where: { id }, data: { ativo: false } }),
           adminAuth.updateUser(existing.firebaseUid, { disabled: true }),
+          adminAuth.revokeRefreshTokens(existing.firebaseUid),
         ])
 
         Sentry.addBreadcrumb({
@@ -111,6 +111,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
       }
 
       // No history — hard delete
+      await adminAuth.revokeRefreshTokens(existing.firebaseUid)
       await adminAuth.deleteUser(existing.firebaseUid)
       await prisma.user.delete({ where: { id } })
 

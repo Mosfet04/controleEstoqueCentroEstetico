@@ -31,6 +31,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!firebaseUser) {
         setUser(null)
         setIsLoading(false)
+        // If the user is currently on a protected page, redirect to login
+        if (window.location.pathname.startsWith('/dashboard')) {
+          router.push('/')
+        }
         return
       }
 
@@ -47,12 +51,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const appUser = await response.json()
           setUser(appUser)
         } else {
-          // User exists in Firebase but not in DB — sign out
+          // User exists in Firebase but is not authorized in DB — sign out
           await firebaseSignOut(getFirebaseAuth())
           setUser(null)
         }
-      } catch {
-        setUser(null)
+      } catch (err) {
+        if (err instanceof TypeError) {
+          // Network failure — do not sign the user out; keep current session state
+          // to prevent spurious logouts on momentary connectivity issues
+          console.warn('[auth] Token sync failed due to network error, retaining session', err)
+        } else {
+          setUser(null)
+        }
       } finally {
         setIsLoading(false)
       }
@@ -62,10 +72,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signOut = async () => {
-    await firebaseSignOut(getFirebaseAuth())
-    await fetch('/api/auth/session', { method: 'DELETE' })
-    setUser(null)
-    router.push('/')
+    try {
+      await firebaseSignOut(getFirebaseAuth())
+      await fetch('/api/auth/session', { method: 'DELETE' })
+    } catch (err) {
+      console.warn('[auth] Error during sign-out cleanup, proceeding anyway', err)
+    } finally {
+      setUser(null)
+      router.push('/')
+    }
   }
 
   return (

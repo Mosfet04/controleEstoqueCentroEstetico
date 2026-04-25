@@ -92,6 +92,7 @@ export const createUserSchema = z.object({
     .string()
     .min(8, 'Senha deve ter pelo menos 8 caracteres')
     .max(128, 'Senha muito longa'),
+  unidadeIds: z.array(z.string().cuid()).optional(),
 })
 
 export type CreateUserInput = z.infer<typeof createUserSchema>
@@ -100,6 +101,7 @@ export const updateUserSchema = z.object({
   name: z.string().min(2).max(200).optional(),
   email: z.string().email().max(320).optional(),
   role: z.enum(['admin', 'clinico']).optional(),
+  unidadeIds: z.array(z.string().cuid()).optional(),
 })
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>
