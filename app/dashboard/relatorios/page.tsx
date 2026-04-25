@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import { dashboardApi, DashboardApi, comparativoApi, ComparativoApi, previsaoApi, PrevisaoItem, ApiError } from '@/lib/api'
+import { generatePdfReport } from '@/lib/pdf-generator'
 import { format, differenceInDays, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { AlertTriangle, Clock, TrendingUp, Package, Trash2, SlidersHorizontal, Users, Activity, XCircle, Download, Loader2, CalendarIcon, Building2, Gauge, FileSpreadsheet, FileText, ChevronDown } from 'lucide-react'
@@ -100,13 +101,32 @@ export default function RelatoriosPage() {
   const handleDownload = useCallback(async (fmt: 'xlsx' | 'pdf') => {
     setDownloadingFormat(fmt)
     try {
+      if (fmt === 'pdf') {
+        if (!data) return
+        const now = nowSP()
+        const month = String(now.getMonth() + 1).padStart(2, '0')
+        const year = now.getFullYear()
+        const suffix = `${year}-${month}`
+        const arrayBuffer = generatePdfReport(data)
+        const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `relatorio-estoque-${suffix}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        URL.revokeObjectURL(url)
+        toast.success('Relatório PDF baixado com sucesso')
+        return
+      }
+
       const headers: Record<string, string> = {}
       const savedId = localStorage.getItem('unidadeAtiva')
       if (savedId) headers['x-unidade-id'] = savedId
       const params = new URLSearchParams({
         from: new Date(appliedFrom).toISOString(),
         to: new Date(appliedTo + 'T23:59:59').toISOString(),
-        format: fmt,
       })
       const response = await fetch(`/api/relatorios/export?${params}`, { headers })
       if (!response.ok) throw new Error('Erro ao gerar relatório')
@@ -125,7 +145,7 @@ export default function RelatoriosPage() {
     } finally {
       setDownloadingFormat(null)
     }
-  }, [appliedFrom, appliedTo])
+  }, [appliedFrom, appliedTo, data])
 
   if (!data) {
     return (

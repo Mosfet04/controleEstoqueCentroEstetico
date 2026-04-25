@@ -36,7 +36,7 @@ function getTableY(doc: jsPDF): number {
   return (doc as any).lastAutoTable?.finalY ?? 0
 }
 
-export function generatePdfReport(data: DashboardApi): Buffer {
+export function generatePdfReport(data: DashboardApi): ArrayBuffer {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const now = nowSP()
   const dateStr = now.toLocaleDateString('pt-BR', { timeZone: SP_TIMEZONE })
@@ -226,5 +226,5 @@ export function generatePdfReport(data: DashboardApi): Buffer {
     doc.text('Stock Beauty Clinic — Controle de Estoque', 14, 292)
   }
 
-  return Buffer.from(doc.output('arraybuffer'))
+  return doc.output('arraybuffer')
 }
