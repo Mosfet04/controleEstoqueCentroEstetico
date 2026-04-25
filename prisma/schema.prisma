@@ -11,16 +11,25 @@ enum UserRole {
   clinico
 }
 
-enum TipoInsumo {
-  injetavel
-  descartavel
-  peeling
-}
-
 enum TipoSaida {
   uso
   descarte
   ajuste
+}
+
+model TipoInsumo {
+  id        String   @id @default(cuid())
+  nome      String
+  slug      String   @unique
+  cor       String   @default("gray")
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  insumos   Insumo[]
+
+  @@index([slug])
+  @@map("tipo_insumo")
 }
 
 model Unidade {
@@ -59,7 +68,8 @@ model Insumo {
   id               String     @id @default(cuid())
   nome             String
   lote             String
-  tipo             TipoInsumo
+  tipoId           String
+  tipoInsumo       TipoInsumo @relation(fields: [tipoId], references: [id])
   fornecedor       String
   quantidade       Int
   quantidadeMinima Int
@@ -73,7 +83,7 @@ model Insumo {
 
   saidas           SaidaInsumo[]
 
-  @@index([tipo])
+  @@index([tipoId])
   @@index([dataVencimento])
   @@index([unidadeId])
   @@index([fornecedor])

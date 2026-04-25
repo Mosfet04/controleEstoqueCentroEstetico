@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/nextjs'
 import { requireAuth, isUser, getUnidadeIdOrGlobal, requireUnidadeAccessOrGlobal } from '@/lib/auth-helpers'
 import { getDashboardData } from '@/lib/dashboard-data'
 import { generateReport } from '@/lib/report-generator'
+import { generatePdfReport } from '@/lib/pdf-generator'
 import { nowSP } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
@@ -19,12 +20,12 @@ export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl
     const from = searchParams.get('from')
     const to = searchParams.get('to')
+    const format = searchParams.get('format') ?? 'xlsx'
     const dateRange = from && to
       ? { from: new Date(from), to: new Date(to) }
       : undefined
 
     const data = await getDashboardData(undefined, unidadeId ?? undefined, dateRange)
-    const buffer = await generateReport(data)
 
     const now = nowSP()
     const month = String(now.getMonth() + 1).padStart(2, '0')
@@ -32,6 +33,19 @@ export async function GET(request: NextRequest) {
     const suffix = dateRange
       ? `${from}-a-${to}`
       : `${year}-${month}`
+
+    if (format === 'pdf') {
+      const buffer = generatePdfReport(data)
+      const filename = `relatorio-estoque-${suffix}.pdf`
+      return new NextResponse(buffer, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+        },
+      })
+    }
+
+    const buffer = await generateReport(data)
     const filename = `relatorio-estoque-${suffix}.xlsx`
 
     return new NextResponse(buffer, {

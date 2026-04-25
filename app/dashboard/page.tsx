@@ -14,6 +14,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react'
 import { dashboardApi, DashboardApi } from '@/lib/api'
+import { COR_BADGE_MAP } from '@/lib/types'
 import { format, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
@@ -21,13 +22,6 @@ import { toSP, nowSP } from '@/lib/utils'
 import { useUnidade } from '@/contexts/unidade-context'
 
 type StatusEstoque = 'bom' | 'atencao' | 'critico'
-type TipoInsumo = 'injetavel' | 'descartavel' | 'peeling'
-
-const TIPO_LABELS: Record<TipoInsumo, string> = {
-  injetavel: 'Injetável',
-  descartavel: 'Descartável',
-  peeling: 'Peeling',
-}
 
 const STATUS_LABELS: Record<StatusEstoque, string> = {
   bom: 'Bom',
@@ -93,15 +87,11 @@ function StatusBadge({ status }: { status: StatusEstoque }) {
   )
 }
 
-function TipoBadge({ tipo }: { tipo: TipoInsumo }) {
-  const variants: Record<TipoInsumo, { className: string }> = {
-    injetavel: { className: 'bg-blue-100 text-blue-700 border-blue-200' },
-    descartavel: { className: 'bg-gray-100 text-gray-700 border-gray-200' },
-    peeling: { className: 'bg-purple-100 text-purple-700 border-purple-200' },
-  }
+function TipoBadge({ nome, cor }: { nome: string; cor: string }) {
+  const className = COR_BADGE_MAP[cor] ?? 'bg-gray-100 text-gray-700 border-gray-200'
   return (
-    <Badge variant="outline" className={variants[tipo].className}>
-      {TIPO_LABELS[tipo]}
+    <Badge variant="outline" className={className}>
+      {nome}
     </Badge>
   )
 }
@@ -126,7 +116,7 @@ export default function DashboardPage() {
     )
   }
 
-  const { metrics, byTipo, byStatus, vencendo30, criticos } = data
+  const { metrics, byTipo, byStatus, vencendo30, criticos, tiposMeta } = data
 
   return (
     <div className="space-y-6">
@@ -200,13 +190,13 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {(Object.keys(byTipo) as TipoInsumo[]).map((tipo) => (
-                <div key={tipo} className="flex items-center justify-between">
+              {(tiposMeta ?? []).map((meta) => (
+                <div key={meta.slug} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <TipoBadge tipo={tipo} />
+                    <TipoBadge nome={meta.nome} cor={meta.cor} />
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold">{byTipo[tipo]}</span>
+                    <span className="text-2xl font-bold">{byTipo[meta.slug] ?? 0}</span>
                     <span className="text-sm text-muted-foreground">itens</span>
                   </div>
                 </div>

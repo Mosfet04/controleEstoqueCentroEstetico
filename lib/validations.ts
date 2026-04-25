@@ -1,6 +1,24 @@
 import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
+// TipoInsumo (dinâmico)
+// ---------------------------------------------------------------------------
+
+export const tipoInsumoSchema = z.object({
+  nome: z.string().min(1, 'Nome é obrigatório').max(100),
+  slug: z
+    .string()
+    .min(1, 'Slug é obrigatório')
+    .max(60)
+    .regex(/^[a-z0-9_]+$/, 'Slug deve conter apenas letras minúsculas, números e _'),
+  cor: z
+    .enum(['blue', 'gray', 'purple', 'green', 'red', 'yellow', 'pink', 'orange', 'indigo', 'teal'])
+    .default('gray'),
+})
+
+export type TipoInsumoInput = z.infer<typeof tipoInsumoSchema>
+
+// ---------------------------------------------------------------------------
 // Unidade
 // ---------------------------------------------------------------------------
 
@@ -20,9 +38,7 @@ export const insumoSchema = z
   .object({
     nome: z.string().min(1, 'Nome é obrigatório').max(200),
     lote: z.string().min(1, 'Lote é obrigatório').max(100),
-    tipo: z.enum(['injetavel', 'descartavel', 'peeling'], {
-      errorMap: () => ({ message: 'Tipo inválido' }),
-    }),
+    tipoId: z.string().min(1, 'Tipo é obrigatório'),
     fornecedor: z.string().min(1, 'Fornecedor é obrigatório').max(200),
     quantidade: z.number().int().min(0, 'Quantidade não pode ser negativa'),
     quantidadeMinima: z.number().int().min(0, 'Quantidade mínima não pode ser negativa'),

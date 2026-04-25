@@ -14,7 +14,10 @@ export async function getDashboardData(referenceDate?: Date, unidadeId?: string,
   const unitFilter = unidadeId ? { unidadeId } : {}
 
   const [allInsumos, saidasMes, descartesMes, ajustesMes, topSaidas] = await Promise.all([
-    prisma.insumo.findMany({ where: unitFilter }),
+    prisma.insumo.findMany({
+      where: unitFilter,
+      include: { tipoInsumo: { select: { slug: true, nome: true, cor: true } } },
+    }),
     prisma.saidaInsumo.count({
       where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'uso' },
     }),
@@ -52,11 +55,26 @@ export async function getDashboardData(referenceDate?: Date, unidadeId?: string,
     ajustesMes,
   }
 
-  const byTipo = {
-    injetavel: allInsumos.filter((i) => i.tipo === 'injetavel').length,
-    descartavel: allInsumos.filter((i) => i.tipo === 'descartavel').length,
-    peeling: allInsumos.filter((i) => i.tipo === 'peeling').length,
+  const byTipo: Record<string, number> = {}
+  for (const i of allInsumos) {
+    const slug = i.tipoInsumo.slug
+    byTipo[slug] = (byTipo[slug] ?? 0) + 1
   }
+
+  // Meta dos tipos presentes para o frontend renderizar labels e cores
+  const tiposPresentes = new Map<string, { slug: string; nome: string; cor: string }>()
+  for (const i of allInsumos) {
+    if (!tiposPresentes.has(i.tipoInsumo.slug)) {
+      tiposPresentes.set(i.tipoInsumo.slug, i.tipoInsumo)
+    }
+  }
+  // Also include all active types even if no insumos
+  const todosOsTipos = await prisma.tipoInsumo.findMany({
+    where: { ativo: true },
+    select: { slug: true, nome: true, cor: true },
+    orderBy: { nome: 'asc' },
+  })
+  const tiposMeta = todosOsTipos
 
   const byStatus = {
     bom: insumosWithStatus.filter((i) => i.status === 'bom').length,
@@ -216,7 +234,7 @@ export async function getDashboardData(referenceDate?: Date, unidadeId?: string,
   const recentInsumos = allInsumos.filter((i) => i.updatedAt >= twoMonthsAgo)
   const zeradoMap = new Map<
     string,
-    { quantidade: number; tipo: string; fornecedor: string }
+    { quantidade: number; tipoNome: string; fornecedor: string }
   >()
   for (const i of recentInsumos) {
     const existing = zeradoMap.get(i.nome)
@@ -225,14 +243,14 @@ export async function getDashboardData(referenceDate?: Date, unidadeId?: string,
     } else {
       zeradoMap.set(i.nome, {
         quantidade: i.quantidade,
-        tipo: i.tipo,
+        tipoNome: i.tipoInsumo.nome,
         fornecedor: i.fornecedor,
       })
     }
   }
   const insumosZerados = [...zeradoMap.entries()]
     .filter(([, v]) => v.quantidade === 0)
-    .map(([nome, v]) => ({ nome, tipo: v.tipo, fornecedor: v.fornecedor }))
+    .map(([nome, v]) => ({ nome, tipoNome: v.tipoNome, fornecedor: v.fornecedor }))
 
   const fornecedores = fornecedoresRaw.map((r) => ({
     nome: r.fornecedor,
@@ -251,6 +269,7 @@ export async function getDashboardData(referenceDate?: Date, unidadeId?: string,
   return {
     metrics,
     byTipo,
+    tiposMeta,
     byStatus,
     topConsumo,
     vencendo30,

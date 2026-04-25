@@ -8,12 +8,6 @@ const TIPO_SAIDA_LABELS: Record<string, string> = {
   ajuste: 'Ajuste',
 }
 
-const TIPO_INSUMO_LABELS: Record<string, string> = {
-  injetavel: 'Injetável',
-  descartavel: 'Descartável',
-  peeling: 'Peeling',
-}
-
 const STATUS_LABELS: Record<string, string> = {
   bom: 'Bom',
   atencao: 'Atenção',
@@ -79,10 +73,17 @@ export async function generateReport(data: DashboardApi): Promise<Buffer> {
     { header: 'Quantidade', key: 'quantidade' },
   ]
   applyHeaderStyle(tipos.getRow(1))
-  const tipoEntries = Object.entries(data.byTipo) as [string, number][]
-  tipoEntries.forEach(([tipo, qtd]) => {
-    tipos.addRow({ tipo: TIPO_INSUMO_LABELS[tipo] ?? tipo, quantidade: qtd })
-  })
+  const tipoMeta = data.tiposMeta ?? []
+  if (tipoMeta.length > 0) {
+    tipoMeta.forEach((meta) => {
+      tipos.addRow({ tipo: meta.nome, quantidade: data.byTipo[meta.slug] ?? 0 })
+    })
+  } else {
+    const tipoEntries = Object.entries(data.byTipo) as [string, number][]
+    tipoEntries.forEach(([tipo, qtd]) => {
+      tipos.addRow({ tipo, quantidade: qtd })
+    })
+  }
   autoFitColumns(tipos)
 
   // --- Distribuição por Status ---
@@ -155,7 +156,7 @@ export async function generateReport(data: DashboardApi): Promise<Buffer> {
   data.insumosZerados.forEach((i) => {
     zerados.addRow({
       nome: i.nome,
-      tipo: TIPO_INSUMO_LABELS[i.tipo] ?? i.tipo,
+      tipo: i.tipoNome,
       fornecedor: i.fornecedor,
     })
   })

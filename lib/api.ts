@@ -70,6 +70,37 @@ export const unidadesApi = {
 }
 
 // ---------------------------------------------------------------------------
+// Tipos de Insumo (dinâmico)
+// ---------------------------------------------------------------------------
+
+export interface TipoInsumoApi {
+  id: string
+  nome: string
+  slug: string
+  cor: string
+  ativo: boolean
+  createdAt: string
+  updatedAt: string
+  _count?: { insumos: number }
+}
+
+export interface TipoInsumoPayload {
+  nome: string
+  slug: string
+  cor: string
+}
+
+export const tiposInsumoApi = {
+  list: () => apiFetch<TipoInsumoApi[]>('/api/tipos-insumo'),
+  create: (data: TipoInsumoPayload) =>
+    apiFetch<TipoInsumoApi>('/api/tipos-insumo', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<TipoInsumoPayload> & { ativo?: boolean }) =>
+    apiFetch<TipoInsumoApi>(`/api/tipos-insumo/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    apiFetch<{ success: boolean }>(`/api/tipos-insumo/${id}`, { method: 'DELETE' }),
+}
+
+// ---------------------------------------------------------------------------
 // Insumos
 // ---------------------------------------------------------------------------
 
@@ -77,7 +108,10 @@ export interface InsumoApi {
   id: string
   nome: string
   lote: string
-  tipo: 'injetavel' | 'descartavel' | 'peeling'
+  tipoId: string
+  tipo: string        // slug do tipo (backward compat)
+  tipoNome: string    // nome de exibição
+  tipoCor: string     // cor para badge/gráfico
   fornecedor: string
   quantidade: number
   quantidadeMinima: number
@@ -94,7 +128,7 @@ export interface InsumoApi {
 export interface InsumoPayload {
   nome: string
   lote: string
-  tipo: string
+  tipoId: string
   fornecedor: string
   quantidade: number
   quantidadeMinima: number
@@ -204,7 +238,8 @@ export interface DashboardApi {
     descartesMes: number
     ajustesMes: number
   }
-  byTipo: { injetavel: number; descartavel: number; peeling: number }
+  byTipo: Record<string, number>
+  tiposMeta: { slug: string; nome: string; cor: string }[]
   byStatus: { bom: number; atencao: number; critico: number }
   topConsumo: { nome: string; total: number }[]
   vencendo30: { id: string; nome: string; dataVencimento: string; status: string }[]
@@ -225,7 +260,7 @@ export interface DashboardApi {
   }[]
   volumePorTipo: { tipo: string; total: number }[]
   topDescartes: { nome: string; total: number; motivo: string }[]
-  insumosZerados: { nome: string; tipo: string; fornecedor: string }[]
+  insumosZerados: { nome: string; tipoNome: string; fornecedor: string }[]
   fornecedores: { nome: string; total: number }[]
   atividadeRecente: {
     id: string

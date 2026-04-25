@@ -40,17 +40,11 @@ import {
 } from '@/components/ui/alert-dialog'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Plus, Search, Pencil, Trash2 } from 'lucide-react'
-import { insumosApi, InsumoApi, ApiError } from '@/lib/api'
+import { insumosApi, tiposInsumoApi, TipoInsumoApi, InsumoApi, ApiError } from '@/lib/api'
+import { COR_BADGE_MAP } from '@/lib/types'
 import { useUnidade } from '@/contexts/unidade-context'
 
-type TipoInsumo = 'injetavel' | 'descartavel' | 'peeling'
 type StatusEstoque = 'bom' | 'atencao' | 'critico'
-
-const TIPO_LABELS: Record<TipoInsumo, string> = {
-  injetavel: 'Injetável',
-  descartavel: 'Descartável',
-  peeling: 'Peeling',
-}
 
 const STATUS_LABELS: Record<StatusEstoque, string> = {
   bom: 'Bom',
@@ -71,20 +65,16 @@ function StatusBadge({ status }: { status: StatusEstoque }) {
   return <Badge variant="outline" className={variants[status].className}>{STATUS_LABELS[status]}</Badge>
 }
 
-function TipoBadge({ tipo }: { tipo: TipoInsumo }) {
-  const variants: Record<TipoInsumo, { className: string }> = {
-    injetavel: { className: 'bg-blue-100 text-blue-700 border-blue-200' },
-    descartavel: { className: 'bg-gray-100 text-gray-700 border-gray-200' },
-    peeling: { className: 'bg-purple-100 text-purple-700 border-purple-200' },
-  }
-  return <Badge variant="outline" className={variants[tipo].className}>{TIPO_LABELS[tipo]}</Badge>
+function TipoBadge({ nome, cor }: { nome: string; cor: string }) {
+  const className = COR_BADGE_MAP[cor] ?? 'bg-gray-100 text-gray-700 border-gray-200'
+  return <Badge variant="outline" className={className}>{nome}</Badge>
 }
 
 interface InsumoFormData {
   unidadeId: string
   nome: string
   lote: string
-  tipo: TipoInsumo
+  tipoId: string
   fornecedor: string
   quantidade: number
   quantidadeMinima: number
@@ -97,25 +87,29 @@ const initialFormData: InsumoFormData = {
   unidadeId: '',
   nome: '',
   lote: '',
-  tipo: 'injetavel',
+  tipoId: '',
   fornecedor: '',
   quantidade: 0,
   quantidadeMinima: 0,
   precoUnitario: '',
-  dataEntrada: format(nowSP(), 'yyyy-MM-dd'),
+  dataEntrada: '',
   dataVencimento: '',
 }
 
 export default function InsumosPage() {
   const { isGlobalView, unidades, unidadeAtiva } = useUnidade()
   const [insumos, setInsumos] = useState<InsumoApi[]>([])
+  const [tiposInsumo, setTiposInsumo] = useState<TipoInsumoApi[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterTipo, setFilterTipo] = useState<TipoInsumo | 'all'>('all')
+  const [filterTipo, setFilterTipo] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<StatusEstoque | 'all'>('all')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingInsumo, setEditingInsumo] = useState<InsumoApi | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [formData, setFormData] = useState<InsumoFormData>(initialFormData)
+  const [formData, setFormData] = useState<InsumoFormData>({
+    ...initialFormData,
+    dataEntrada: format(nowSP(), 'yyyy-MM-dd'),
+  })
 
   const loadInsumos = async () => {
     try {
@@ -128,8 +122,18 @@ export default function InsumosPage() {
     }
   }
 
+  const loadTipos = async () => {
+    try {
+      const data = await tiposInsumoApi.list()
+      setTiposInsumo(data.filter((t) => t.ativo))
+    } catch {
+      // silencioso — não bloqueia o uso
+    }
+  }
+
   useEffect(() => {
     loadInsumos()
+    loadTipos()
   }, [])
 
   const filteredInsumos = insumos.filter((insumo) => {
@@ -137,7 +141,7 @@ export default function InsumosPage() {
       insumo.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       insumo.lote.toLowerCase().includes(searchTerm.toLowerCase()) ||
       insumo.fornecedor.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesTipo = filterTipo === 'all' || insumo.tipo === filterTipo
+    const matchesTipo = filterTipo === 'all' || insumo.tipoId === filterTipo
     const matchesStatus = filterStatus === 'all' || insumo.status === filterStatus
     return matchesSearch && matchesTipo && matchesStatus
   })
@@ -149,7 +153,7 @@ export default function InsumosPage() {
         unidadeId: insumo.unidadeId,
         nome: insumo.nome,
         lote: insumo.lote,
-        tipo: insumo.tipo,
+        tipoId: insumo.tipoId,
         fornecedor: insumo.fornecedor,
         quantidade: insumo.quantidade,
         quantidadeMinima: insumo.quantidadeMinima,
@@ -161,6 +165,8 @@ export default function InsumosPage() {
       setEditingInsumo(null)
       setFormData({
         ...initialFormData,
+        dataEntrada: format(nowSP(), 'yyyy-MM-dd'),
+        tipoId: tiposInsumo[0]?.id ?? '',
         unidadeId: unidadeAtiva?.id ?? unidades.filter((u) => u.ativa)[0]?.id ?? '',
       })
     }
@@ -178,7 +184,7 @@ export default function InsumosPage() {
     const payload = {
       nome: formData.nome,
       lote: formData.lote,
-      tipo: formData.tipo,
+      tipoId: formData.tipoId,
       fornecedor: formData.fornecedor,
       quantidade: formData.quantidade,
       quantidadeMinima: formData.quantidadeMinima,
@@ -287,14 +293,14 @@ export default function InsumosPage() {
                 </Field>
                 <Field>
                   <FieldLabel>Tipo</FieldLabel>
-                  <Select value={formData.tipo} onValueChange={(v) => setFormData({ ...formData, tipo: v as TipoInsumo })}>
+                  <Select value={formData.tipoId} onValueChange={(v) => setFormData({ ...formData, tipoId: v })}>
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="injetavel">Injetável</SelectItem>
-                      <SelectItem value="descartavel">Descartável</SelectItem>
-                      <SelectItem value="peeling">Peeling</SelectItem>
+                      {tiposInsumo.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </Field>
@@ -388,15 +394,15 @@ export default function InsumosPage() {
                 className="pl-10"
               />
             </div>
-            <Select value={filterTipo} onValueChange={(v) => setFilterTipo(v as TipoInsumo | 'all')}>
+            <Select value={filterTipo} onValueChange={(v) => setFilterTipo(v)}>
               <SelectTrigger className="w-full sm:w-40">
                 <SelectValue placeholder="Tipo" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os tipos</SelectItem>
-                <SelectItem value="injetavel">Injetável</SelectItem>
-                <SelectItem value="descartavel">Descartável</SelectItem>
-                <SelectItem value="peeling">Peeling</SelectItem>
+                {tiposInsumo.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as StatusEstoque | 'all')}>
@@ -452,7 +458,7 @@ export default function InsumosPage() {
                       )}
                       <TableCell className="font-medium">{insumo.nome}</TableCell>
                       <TableCell className="text-muted-foreground">{insumo.lote}</TableCell>
-                      <TableCell><TipoBadge tipo={insumo.tipo} /></TableCell>
+                      <TableCell><TipoBadge nome={insumo.tipoNome} cor={insumo.tipoCor} /></TableCell>
                       <TableCell>{insumo.fornecedor}</TableCell>
                       <TableCell className="text-center font-semibold">{insumo.quantidade}</TableCell>
                       <TableCell className="text-right">

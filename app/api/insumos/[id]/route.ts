@@ -22,13 +22,17 @@ export async function GET(request: NextRequest, { params }: Params) {
   const { id } = await params
 
   try {
-    const insumo = await prisma.insumo.findUnique({ where: { id } })
+    const insumo = await prisma.insumo.findUnique({
+      where: { id },
+      include: { tipoInsumo: { select: { slug: true, nome: true, cor: true } } },
+    })
 
     if (!insumo || insumo.unidadeId !== unidadeId) {
       return NextResponse.json({ error: 'Insumo não encontrado' }, { status: 404 })
     }
 
-    return NextResponse.json(insumoWithStatus(insumo))
+    const { tipoInsumo, ...rest } = insumo
+    return NextResponse.json({ ...insumoWithStatus(rest), tipo: tipoInsumo.slug, tipoNome: tipoInsumo.nome, tipoCor: tipoInsumo.cor })
   } catch (error) {
     Sentry.captureException(error, { tags: { route: `GET /api/insumos/${id}` } })
     return NextResponse.json({ error: 'Erro ao buscar insumo' }, { status: 500 })
@@ -64,15 +68,22 @@ export async function PUT(request: NextRequest, { params }: Params) {
         )
       }
 
-      const { dataEntrada, dataVencimento, ...rest } = parsed.data
+      const { dataEntrada, dataVencimento, tipoId, ...rest } = parsed.data
+
+      const tipoExists = await prisma.tipoInsumo.findFirst({ where: { id: tipoId, ativo: true } })
+      if (!tipoExists) {
+        return NextResponse.json({ error: 'Tipo de insumo não encontrado' }, { status: 422 })
+      }
 
       const updated = await prisma.insumo.update({
         where: { id },
         data: {
           ...rest,
+          tipoId,
           dataEntrada: new Date(dataEntrada),
           dataVencimento: new Date(dataVencimento),
         },
+        include: { tipoInsumo: { select: { slug: true, nome: true, cor: true } } },
       })
 
       Sentry.addBreadcrumb({
@@ -81,7 +92,8 @@ export async function PUT(request: NextRequest, { params }: Params) {
         data: { id, userId: user.id },
       })
 
-      return NextResponse.json(insumoWithStatus(updated))
+      const { tipoInsumo, ...updatedRest } = updated
+      return NextResponse.json({ ...insumoWithStatus(updatedRest), tipo: tipoInsumo.slug, tipoNome: tipoInsumo.nome, tipoCor: tipoInsumo.cor })
     } catch (error) {
       Sentry.captureException(error, { tags: { route: `PUT /api/insumos/${id}` } })
       return NextResponse.json({ error: 'Erro ao atualizar insumo' }, { status: 500 })

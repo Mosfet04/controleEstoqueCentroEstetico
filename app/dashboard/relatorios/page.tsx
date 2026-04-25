@@ -9,20 +9,15 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { dashboardApi, DashboardApi, comparativoApi, ComparativoApi, previsaoApi, PrevisaoItem, ApiError } from '@/lib/api'
 import { format, differenceInDays, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { AlertTriangle, Clock, TrendingUp, Package, Trash2, SlidersHorizontal, Users, Activity, XCircle, Download, Loader2, CalendarIcon, Building2, Gauge } from 'lucide-react'
+import { AlertTriangle, Clock, TrendingUp, Package, Trash2, SlidersHorizontal, Users, Activity, XCircle, Download, Loader2, CalendarIcon, Building2, Gauge, FileSpreadsheet, FileText, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { toSP, nowSP } from '@/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useUnidade } from '@/contexts/unidade-context'
+import { COR_CHART_MAP } from '@/lib/types'
 
-type TipoInsumo = 'injetavel' | 'descartavel' | 'peeling'
 type StatusEstoque = 'bom' | 'atencao' | 'critico'
-
-const TIPO_LABELS: Record<TipoInsumo, string> = {
-  injetavel: 'Injetável',
-  descartavel: 'Descartável',
-  peeling: 'Peeling',
-}
 
 const STATUS_LABELS: Record<StatusEstoque, string> = {
   bom: 'Bom',
@@ -46,12 +41,6 @@ const STATUS_COLORS: Record<StatusEstoque, string> = {
   critico: COLORS.danger,
 }
 
-const TIPO_COLORS: Record<TipoInsumo, string> = {
-  injetavel: COLORS.blue,
-  descartavel: COLORS.gray,
-  peeling: COLORS.purple,
-}
-
 const TIPO_SAIDA_LABELS: Record<string, string> = {
   uso: 'Uso Clínico',
   descarte: 'Descarte',
@@ -64,17 +53,12 @@ const TIPO_SAIDA_COLORS: Record<string, string> = {
   ajuste: COLORS.warning,
 }
 
-const TIPO_INSUMO_LABELS: Record<string, string> = {
-  injetavel: 'Injetável',
-  descartavel: 'Descartável',
-  peeling: 'Peeling',
-}
 
 export default function RelatoriosPage() {
   const [data, setData] = useState<DashboardApi | null>(null)
   const [comparativo, setComparativo] = useState<ComparativoApi | null>(null)
   const [previsao, setPrevisao] = useState<PrevisaoItem[] | null>(null)
-  const [isDownloading, setIsDownloading] = useState(false)
+  const [downloadingFormat, setDownloadingFormat] = useState<'xlsx' | 'pdf' | null>(null)
   const { unidadeAtiva } = useUnidade()
 
   const now = nowSP()
@@ -113,8 +97,8 @@ export default function RelatoriosPage() {
     })
   }, [])
 
-  const handleDownload = useCallback(async () => {
-    setIsDownloading(true)
+  const handleDownload = useCallback(async (fmt: 'xlsx' | 'pdf') => {
+    setDownloadingFormat(fmt)
     try {
       const headers: Record<string, string> = {}
       const savedId = localStorage.getItem('unidadeAtiva')
@@ -122,6 +106,7 @@ export default function RelatoriosPage() {
       const params = new URLSearchParams({
         from: new Date(appliedFrom).toISOString(),
         to: new Date(appliedTo + 'T23:59:59').toISOString(),
+        format: fmt,
       })
       const response = await fetch(`/api/relatorios/export?${params}`, { headers })
       if (!response.ok) throw new Error('Erro ao gerar relatório')
@@ -129,7 +114,7 @@ export default function RelatoriosPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = response.headers.get('Content-Disposition')?.split('filename="')[1]?.replace('"', '') ?? 'relatorio.xlsx'
+      a.download = response.headers.get('Content-Disposition')?.split('filename="')[1]?.replace('"', '') ?? `relatorio.${fmt}`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -138,7 +123,7 @@ export default function RelatoriosPage() {
     } catch {
       toast.error('Erro ao baixar relatório')
     } finally {
-      setIsDownloading(false)
+      setDownloadingFormat(null)
     }
   }, [appliedFrom, appliedTo])
 
@@ -153,13 +138,13 @@ export default function RelatoriosPage() {
   const {
     metrics, byTipo, byStatus, topConsumo, vencendo60: vencendo, criticos,
     movimentacaoColaborador, volumePorTipo, topDescartes, insumosZerados,
-    fornecedores, atividadeRecente,
+    fornecedores, atividadeRecente, tiposMeta,
   } = data
 
-  const tipoData = (Object.keys(byTipo) as TipoInsumo[]).map((tipo) => ({
-    name: TIPO_LABELS[tipo],
-    value: byTipo[tipo],
-    color: TIPO_COLORS[tipo],
+  const tipoData = (tiposMeta ?? []).map((meta) => ({
+    name: meta.nome,
+    value: byTipo[meta.slug] ?? 0,
+    color: COR_CHART_MAP[meta.cor] ?? COLORS.gray,
   }))
 
   const statusData = (Object.keys(byStatus) as StatusEstoque[]).map((status) => ({
@@ -188,14 +173,29 @@ export default function RelatoriosPage() {
             {unidadeAtiva ? `${unidadeAtiva.nome} — ` : ''}Análises e métricas do controle de estoque
           </p>
         </div>
-        <Button onClick={handleDownload} disabled={isDownloading}>
-          {isDownloading ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <Download className="w-4 h-4 mr-2" />
-          )}
-          Exportar XLSX
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button disabled={!!downloadingFormat}>
+              {downloadingFormat ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4 mr-2" />
+              )}
+              Exportar
+              <ChevronDown className="w-4 h-4 ml-1" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleDownload('xlsx')} disabled={!!downloadingFormat}>
+              <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />
+              Excel (.xlsx)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleDownload('pdf')} disabled={!!downloadingFormat}>
+              <FileText className="w-4 h-4 mr-2 text-red-600" />
+              PDF
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Filtro de período */}
@@ -555,7 +555,7 @@ export default function RelatoriosPage() {
                       <p className="text-xs text-muted-foreground">{i.fornecedor}</p>
                     </div>
                     <Badge variant="secondary">
-                      {TIPO_INSUMO_LABELS[i.tipo] ?? i.tipo}
+                      {i.tipoNome}
                     </Badge>
                   </div>
                 ))}
