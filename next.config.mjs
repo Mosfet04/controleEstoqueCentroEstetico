@@ -5,6 +5,10 @@ const securityHeaders = [
   { key: 'X-DNS-Prefetch-Control', value: 'on' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
   { key: 'X-Frame-Options', value: 'DENY' },
+  // same-origin-allow-popups: allows Google OAuth popup (signInWithPopup) to communicate
+  // back to the opener window. Without this explicit header, Next.js/Vercel may default to
+  // same-origin, which blocks the window.closed check in Firebase SDK (COOP warning).
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },

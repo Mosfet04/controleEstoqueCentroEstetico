@@ -20,7 +20,9 @@ export async function requireAuth(
 
   try {
     const adminAuth = getAdminAuth()
-    const decoded = await adminAuth.verifyIdToken(token)
+    // Cookie now holds a Firebase Admin session cookie (created via createSessionCookie),
+    // NOT a raw ID token. verifySessionCookie must be used; verifyIdToken rejects it.
+    const decoded = await adminAuth.verifySessionCookie(token, true /* checkRevoked */)
 
     const user = await prisma.user.findUnique({
       where: { firebaseUid: decoded.uid },
