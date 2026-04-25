@@ -15,7 +15,10 @@ export async function POST(request: NextRequest) {
     }
 
     const adminAuth = getAdminAuth()
-    const decoded = await adminAuth.verifyIdToken(token)
+    // verifySessionCookie must be used here because the cookie now contains a
+    // Firebase Admin session cookie (via createSessionCookie), NOT a raw ID token.
+    // The second argument (true) enables revocation checking.
+    const decoded = await adminAuth.verifySessionCookie(token, true)
 
     return NextResponse.json({ uid: decoded.uid, email: decoded.email })
   } catch {

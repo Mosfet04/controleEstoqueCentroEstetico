@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { signInWithEmailAndPassword, signInWithPopup, linkWithCredential, GoogleAuthProvider, sendPasswordResetEmail, AuthError, OAuthCredential } from 'firebase/auth'
+import { signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, linkWithCredential, GoogleAuthProvider, sendPasswordResetEmail, AuthError, OAuthCredential } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,6 +11,14 @@ import { Separator } from '@/components/ui/separator'
 import { Sparkles, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { getFirebaseAuth } from '@/lib/firebase'
 import { toast } from 'sonner'
+
+function isStandalonePWA(): boolean {
+  if (typeof window === 'undefined') return false
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    !!(window.navigator as { standalone?: boolean }).standalone
+  )
+}
 
 function getFirebaseErrorMessage(code: string): string {
   switch (code) {
@@ -59,6 +67,26 @@ export default function LoginPage() {
   const [isResetLoading, setIsResetLoading] = useState(false)
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
   const [pendingGoogleCredential, setPendingGoogleCredential] = useState<OAuthCredential | null>(null)
+
+  // Handles the result from signInWithRedirect (used in iOS PWA standalone mode)
+  useEffect(() => {
+    const handleRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(getFirebaseAuth())
+        if (!result) return
+        const idToken = await result.user.getIdToken()
+        const appUser = await exchangeFirebaseToken(idToken)
+        toast.success(`Bem-vindo(a), ${appUser.name}!`)
+        router.push('/dashboard')
+      } catch (err) {
+        const code = (err as AuthError)?.code ?? ''
+        if (code && code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
+          toast.error(getFirebaseErrorMessage(code))
+        }
+      }
+    }
+    handleRedirectResult()
+  }, [router])
 
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {}
@@ -113,6 +141,13 @@ export default function LoginPage() {
     setIsGoogleLoading(true)
     try {
       const provider = new GoogleAuthProvider()
+      if (isStandalonePWA()) {
+        // Popups don't work in iOS/Android standalone PWA mode:
+        // the popup opens in Safari (a separate context) and the result
+        // never returns to the PWA. Use redirect flow instead.
+        await signInWithRedirect(getFirebaseAuth(), provider)
+        return // page will redirect; result handled by the useEffect above
+      }
       const credential = await signInWithPopup(getFirebaseAuth(), provider)
       const idToken = await credential.user.getIdToken()
       const appUser = await exchangeFirebaseToken(idToken)
