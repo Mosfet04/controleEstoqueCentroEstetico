@@ -11,8 +11,15 @@ export async function GET(request: NextRequest) {
 
   try {
     const now = nowSP()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+    const { searchParams } = request.nextUrl
+    const fromParam = searchParams.get('from')
+    const toParam = searchParams.get('to')
+    const periodStart = fromParam
+      ? new Date(fromParam)
+      : new Date(now.getFullYear(), now.getMonth(), 1)
+    const periodEnd = toParam
+      ? new Date(toParam)
+      : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
     const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
 
     const unidades = await prisma.unidade.findMany({
@@ -26,13 +33,13 @@ export async function GET(request: NextRequest) {
         const [insumos, saidasMes, descartesMes, ajustesMes] = await Promise.all([
           prisma.insumo.findMany({ where: { unidadeId: u.id } }),
           prisma.saidaInsumo.count({
-            where: { unidadeId: u.id, dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'uso' },
+            where: { unidadeId: u.id, dataRetirada: { gte: periodStart, lte: periodEnd }, tipo: 'uso' },
           }),
           prisma.saidaInsumo.count({
-            where: { unidadeId: u.id, dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'descarte' },
+            where: { unidadeId: u.id, dataRetirada: { gte: periodStart, lte: periodEnd }, tipo: 'descarte' },
           }),
           prisma.saidaInsumo.count({
-            where: { unidadeId: u.id, dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'ajuste' },
+            where: { unidadeId: u.id, dataRetirada: { gte: periodStart, lte: periodEnd }, tipo: 'ajuste' },
           }),
         ])
 

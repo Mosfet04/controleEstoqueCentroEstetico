@@ -70,9 +70,9 @@ export function generatePdfReport(data: DashboardApi): ArrayBuffer {
       ['Estoque Atenção', String(data.metrics.insumosAtencao)],
       ['Vencendo (30 dias)', String(data.metrics.insumosVencendo)],
       ['Vencidos', String(data.metrics.insumosVencidos)],
-      ['Saídas Uso Clínico (mês)', String(data.metrics.saidasMes)],
-      ['Descartes (mês)', String(data.metrics.descartesMes)],
-      ['Ajustes (mês)', String(data.metrics.ajustesMes)],
+      ['Saídas Uso Clínico (período)', String(data.metrics.saidasMes)],
+      ['Descartes (período)', String(data.metrics.descartesMes)],
+      ['Ajustes (período)', String(data.metrics.ajustesMes)],
     ],
     headStyles: { fillColor: PURPLE, textColor: WHITE, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: LIGHT_GRAY },
@@ -111,7 +111,7 @@ export function generatePdfReport(data: DashboardApi): ArrayBuffer {
   // --- Top Consumo ---
   if (data.topConsumo.length > 0) {
     if (y > 240) { doc.addPage(); y = 20 }
-    y = addSectionTitle(doc, 'Top Consumo (mês)', y)
+    y = addSectionTitle(doc, 'Top Consumo (período)', y)
     autoTable(doc, {
       startY: y,
       head: [['Insumo', 'Total Saídas']],
@@ -145,7 +145,7 @@ export function generatePdfReport(data: DashboardApi): ArrayBuffer {
   // --- Top Descartes ---
   if (data.topDescartes.length > 0) {
     if (y > 240) { doc.addPage(); y = 20 }
-    y = addSectionTitle(doc, 'Top Descartes (mês)', y)
+    y = addSectionTitle(doc, 'Top Descartes (período)', y)
     autoTable(doc, {
       startY: y,
       head: [['Produto', 'Quantidade', 'Motivo Principal']],

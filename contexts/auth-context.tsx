@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { onIdTokenChanged, signOut as firebaseSignOut, User as FirebaseUser } from 'firebase/auth'
 import { useRouter } from 'next/navigation'
 import { getFirebaseAuth } from '@/lib/firebase'
+import { toast } from 'sonner'
 
 export interface AppUser {
   id: string
@@ -51,9 +52,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const appUser = await response.json()
           setUser(appUser)
         } else {
-          // User exists in Firebase but is not authorized in DB — sign out
+          // User exists in Firebase but is blocked in the app (not registered or deactivated).
+          // Read the server message and surface it to the user before signing out.
+          const data = await response.json().catch(() => ({}))
+          const message: string =
+            data?.error ?? 'Acesso negado. Contate o administrador.'
           await firebaseSignOut(getFirebaseAuth())
           setUser(null)
+          toast.error(message)
         }
       } catch (err) {
         if (err instanceof TypeError) {

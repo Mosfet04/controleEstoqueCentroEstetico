@@ -57,9 +57,9 @@ export async function generateReport(data: DashboardApi): Promise<Buffer> {
     ['Estoque Atenção', data.metrics.insumosAtencao],
     ['Vencendo (30 dias)', data.metrics.insumosVencendo],
     ['Vencidos', data.metrics.insumosVencidos],
-    ['Saídas Uso Clínico (mês)', data.metrics.saidasMes],
-    ['Descartes (mês)', data.metrics.descartesMes],
-    ['Ajustes (mês)', data.metrics.ajustesMes],
+    ['Saídas Uso Clínico (período)', data.metrics.saidasMes],
+    ['Descartes (período)', data.metrics.descartesMes],
+    ['Ajustes (período)', data.metrics.ajustesMes],
   ]
   metricsRows.forEach(([metrica, valor]) => {
     resumo.addRow({ metrica, valor })

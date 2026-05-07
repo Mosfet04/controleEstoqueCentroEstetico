@@ -55,6 +55,16 @@ const TIPO_SAIDA_COLORS: Record<string, string> = {
   ajuste: COLORS.warning,
 }
 
+function SectionHeading({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div className="pt-2 border-t">
+      <h2 className="text-lg sm:text-xl font-semibold text-foreground">{title}</h2>
+      {subtitle && (
+        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{subtitle}</p>
+      )}
+    </div>
+  )
+}
 
 export default function RelatoriosPage() {
   const { user } = useAuth()
@@ -80,16 +90,16 @@ export default function RelatoriosPage() {
 
   const loadData = useCallback(() => {
     setData(null)
-    dashboardApi.get({
-      from: new Date(appliedFrom).toISOString(),
-      to: new Date(appliedTo + 'T23:59:59').toISOString(),
-    })
+    const fromIso = new Date(appliedFrom).toISOString()
+    const toIso = new Date(appliedTo + 'T23:59:59').toISOString()
+    dashboardApi.get({ from: fromIso, to: toIso })
       .then(setData)
       .catch((err) => {
         if (err instanceof ApiError && err.status !== 401) {
           toast.error('Erro ao carregar relatórios')
         }
       })
+    comparativoApi.get({ from: fromIso, to: toIso }).then(setComparativo).catch(() => {})
   }, [appliedFrom, appliedTo])
 
   useEffect(() => {
@@ -101,8 +111,8 @@ export default function RelatoriosPage() {
     setAppliedTo(dateTo)
   }, [dateFrom, dateTo])
 
+  // Previsão usa janela fixa de 90 dias — independente do filtro
   useEffect(() => {
-    comparativoApi.get().then(setComparativo).catch(() => {})
     previsaoApi.list().then(setPrevisao).catch(() => {
       setPrevisao([])
     })
@@ -111,12 +121,10 @@ export default function RelatoriosPage() {
   const handleDownload = useCallback(async (fmt: 'xlsx' | 'pdf') => {
     setDownloadingFormat(fmt)
     try {
+      const suffix = `${appliedFrom}-a-${appliedTo}`
+
       if (fmt === 'pdf') {
         if (!data) return
-        const now = nowSP()
-        const month = String(now.getMonth() + 1).padStart(2, '0')
-        const year = now.getFullYear()
-        const suffix = `${year}-${month}`
         const { generatePdfReport } = await import('@/lib/pdf-generator')
         const arrayBuffer = generatePdfReport(data)
         const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
@@ -195,6 +203,8 @@ export default function RelatoriosPage() {
     total: f.total,
   }))
 
+  const periodoLabel = `${format(toSP(new Date(appliedFrom)), 'dd/MM/yyyy', { locale: ptBR })} a ${format(toSP(new Date(appliedTo)), 'dd/MM/yyyy', { locale: ptBR })}`
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -232,32 +242,42 @@ export default function RelatoriosPage() {
       {/* Filtro de período */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
             <CalendarIcon className="w-4 h-4 text-muted-foreground hidden sm:block" />
             <span className="text-sm font-medium text-muted-foreground">Período:</span>
             <Input
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="w-[160px]"
+              className="w-full sm:w-[160px]"
             />
-            <span className="text-sm text-muted-foreground">até</span>
+            <span className="text-sm text-muted-foreground hidden sm:inline">até</span>
             <Input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="w-[160px]"
+              className="w-full sm:w-[160px]"
             />
-            <Button onClick={handleFilter} size="sm">
+            <Button onClick={handleFilter} size="sm" className="w-full sm:w-auto">
               <CalendarIcon className="w-4 h-4 mr-2" />
               Filtrar
             </Button>
+            <p className="text-xs text-muted-foreground sm:ml-auto">
+              Aplica-se às movimentações abaixo
+            </p>
           </div>
         </CardContent>
       </Card>
 
-      {/* Cards de resumo */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ─────────────────────────────────────────────
+           ESTADO ATUAL DO ESTOQUE (snapshot atual)
+         ───────────────────────────────────────────── */}
+      <SectionHeading
+        title="Estado Atual do Estoque"
+        subtitle="Snapshot do estoque agora — não é afetado pelo filtro de período"
+      />
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -300,49 +320,6 @@ export default function RelatoriosPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-green-100">
-                <TrendingUp className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{metrics.saidasMes}</p>
-                <p className="text-xs text-muted-foreground">Saídas no Mês</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Cards de resumo - Linha 2 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-red-100">
-                <Trash2 className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{metrics.descartesMes}</p>
-                <p className="text-xs text-muted-foreground">Descartes no Mês</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-100">
-                <SlidersHorizontal className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{metrics.ajustesMes}</p>
-                <p className="text-xs text-muted-foreground">Ajustes no Mês</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
               <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-red-100">
                 <XCircle className="w-5 h-5 text-red-600" />
               </div>
@@ -368,7 +345,6 @@ export default function RelatoriosPage() {
         </Card>
       </div>
 
-      {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Por Tipo */}
         <Card>
@@ -435,159 +411,34 @@ export default function RelatoriosPage() {
         </Card>
       </div>
 
-      {/* Top Consumo */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Insumos Mais Consumidos</CardTitle>
-          <CardDescription>Ranking de retiradas do estoque</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {topConsumo.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-8">Nenhuma saída registrada ainda.</p>
-          ) : (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topConsumo} layout="vertical" margin={{ left: 100 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" />
-                  <YAxis type="category" dataKey="nome" tick={{ fontSize: 12 }} width={100} />
-                  <Tooltip />
-                  <Bar dataKey="total" fill={COLORS.primary} radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Volume por Tipo de Saída */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Volume por Tipo de Saída</CardTitle>
-          <CardDescription>Unidades movimentadas no mês por tipo</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {volumeData.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-8">Nenhuma saída registrada no mês.</p>
-          ) : (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={volumeData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="value" name="Unidades" radius={[4, 4, 0, 0]}>
-                    {volumeData.map((entry, index) => (
-                      <Cell key={`vol-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Ranking e Descartes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Estoque Baixo */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-primary" />
-              Movimentação por Colaborador
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+              Estoque Baixo
             </CardTitle>
-            <CardDescription>Ranking de saídas no mês</CardDescription>
+            <CardDescription>Insumos que precisam de reposição</CardDescription>
           </CardHeader>
           <CardContent>
-            {movimentacaoColaborador.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-4">Nenhuma movimentação no mês.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Colaborador</TableHead>
-                    <TableHead className="text-right">Uso</TableHead>
-                    <TableHead className="text-right">Desc.</TableHead>
-                    <TableHead className="text-right">Ajuste</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {movimentacaoColaborador.map((c) => (
-                    <TableRow key={c.nome}>
-                      <TableCell className="font-medium">{c.nome}</TableCell>
-                      <TableCell className="text-right">{c.uso}</TableCell>
-                      <TableCell className="text-right">{c.descarte}</TableCell>
-                      <TableCell className="text-right">{c.ajuste}</TableCell>
-                      <TableCell className="text-right font-bold">{c.total}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Trash2 className="w-5 h-5 text-red-600" />
-              Produtos Mais Descartados
-            </CardTitle>
-            <CardDescription>Top descartes no mês</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {topDescartes.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-4">Nenhum descarte no mês.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Produto</TableHead>
-                    <TableHead className="text-right">Qtd</TableHead>
-                    <TableHead>Motivo Principal</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {topDescartes.map((d) => (
-                    <TableRow key={d.nome}>
-                      <TableCell className="font-medium">{d.nome}</TableCell>
-                      <TableCell className="text-right">{d.total}</TableCell>
-                      <TableCell>{d.motivo}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Zerados e Fornecedores */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <XCircle className="w-5 h-5 text-red-600" />
-              Insumos com Estoque Zerado
-            </CardTitle>
-            <CardDescription>Produtos sem estoque (ativos nos últimos 2 meses)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {insumosZerados.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-4">Nenhum insumo com estoque zerado.</p>
+            {criticos.length === 0 ? (
+              <p className="text-muted-foreground text-sm text-center py-4">Todos os insumos com estoque adequado.</p>
             ) : (
               <div className="space-y-3">
-                {insumosZerados.map((i) => (
-                  <div key={i.nome} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+                {criticos.map((insumo) => (
+                  <div key={insumo.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                     <div>
-                      <p className="font-medium text-sm">{i.nome}</p>
-                      <p className="text-xs text-muted-foreground">{i.fornecedor}</p>
+                      <p className="font-medium text-sm">{insumo.nome}</p>
                     </div>
-                    <Badge variant="secondary">
-                      {i.tipoNome}
-                    </Badge>
+                    <div className="text-right">
+                      <Badge variant={insumo.status === 'critico' ? 'destructive' : 'secondary'}>
+                        {insumo.quantidade} / {insumo.quantidadeMinima}
+                      </Badge>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {insumo.status === 'critico' ? 'Crítico' : 'Atenção'}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -595,68 +446,7 @@ export default function RelatoriosPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Distribuição por Fornecedor</CardTitle>
-            <CardDescription>Top fornecedores por quantidade de insumos</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {fornecedorData.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-8">Nenhum fornecedor registrado.</p>
-            ) : (
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={fornecedorData} layout="vertical" margin={{ left: 80 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" />
-                    <YAxis type="category" dataKey="nome" tick={{ fontSize: 12 }} width={80} />
-                    <Tooltip />
-                    <Bar dataKey="total" name="Insumos" fill={COLORS.primary} radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Atividade Recente */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="w-5 h-5 text-primary" />
-            Atividade Recente
-          </CardTitle>
-          <CardDescription>Últimas movimentações do estoque</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {atividadeRecente.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-4">Nenhuma atividade registrada.</p>
-          ) : (
-            <div className="space-y-3">
-              {atividadeRecente.map((a) => (
-                <div key={a.id} className="flex items-center gap-4 p-3 rounded-lg bg-secondary/50">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{a.insumoNome}</p>
-                    <p className="text-xs text-muted-foreground">{a.responsavel}</p>
-                  </div>
-                  <Badge variant={a.tipo === 'descarte' ? 'destructive' : a.tipo === 'ajuste' ? 'secondary' : 'default'}>
-                    {TIPO_SAIDA_LABELS[a.tipo] ?? a.tipo}
-                  </Badge>
-                  <span className="text-sm font-medium tabular-nums">{a.quantidade} un.</span>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {format(toSP(a.dataRetirada), "dd/MM HH:mm", { locale: ptBR })}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Tabelas de alerta */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Vencendo */}
+        {/* Vencendo nos próximos 60 dias */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -692,41 +482,281 @@ export default function RelatoriosPage() {
             )}
           </CardContent>
         </Card>
+      </div>
 
-        {/* Estoque Baixo */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Insumos com Estoque Zerado */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
-              Estoque Baixo
+              <XCircle className="w-5 h-5 text-red-600" />
+              Insumos com Estoque Zerado
             </CardTitle>
-            <CardDescription>Insumos que precisam de reposição</CardDescription>
+            <CardDescription>Produtos sem estoque (ativos nos últimos 2 meses)</CardDescription>
           </CardHeader>
           <CardContent>
-            {criticos.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-4">Todos os insumos com estoque adequado.</p>
+            {insumosZerados.length === 0 ? (
+              <p className="text-muted-foreground text-sm text-center py-4">Nenhum insumo com estoque zerado.</p>
             ) : (
               <div className="space-y-3">
-                {criticos.map((insumo) => (
-                  <div key={insumo.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+                {insumosZerados.map((i) => (
+                  <div key={i.nome} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                     <div>
-                      <p className="font-medium text-sm">{insumo.nome}</p>
+                      <p className="font-medium text-sm">{i.nome}</p>
+                      <p className="text-xs text-muted-foreground">{i.fornecedor}</p>
                     </div>
-                    <div className="text-right">
-                      <Badge variant={insumo.status === 'critico' ? 'destructive' : 'secondary'}>
-                        {insumo.quantidade} / {insumo.quantidadeMinima}
-                      </Badge>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {insumo.status === 'critico' ? 'Crítico' : 'Atenção'}
-                      </p>
-                    </div>
+                    <Badge variant="secondary">
+                      {i.tipoNome}
+                    </Badge>
                   </div>
                 ))}
               </div>
             )}
           </CardContent>
         </Card>
+
+        {/* Distribuição por Fornecedor */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Distribuição por Fornecedor</CardTitle>
+            <CardDescription>Top fornecedores por quantidade de insumos</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {fornecedorData.length === 0 ? (
+              <p className="text-muted-foreground text-sm text-center py-8">Nenhum fornecedor registrado.</p>
+            ) : (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={fornecedorData} layout="vertical" margin={{ left: 80 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" />
+                    <YAxis type="category" dataKey="nome" tick={{ fontSize: 12 }} width={80} />
+                    <Tooltip />
+                    <Bar dataKey="total" name="Insumos" fill={COLORS.primary} radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      {/* ─────────────────────────────────────────────
+           MOVIMENTAÇÕES NO PERÍODO (filtradas)
+         ───────────────────────────────────────────── */}
+      <SectionHeading
+        title="Movimentações no Período"
+        subtitle={periodoLabel}
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-green-100">
+                <TrendingUp className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{metrics.saidasMes}</p>
+                <p className="text-xs text-muted-foreground">Saídas no Período</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-red-100">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{metrics.descartesMes}</p>
+                <p className="text-xs text-muted-foreground">Descartes no Período</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-100">
+                <SlidersHorizontal className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{metrics.ajustesMes}</p>
+                <p className="text-xs text-muted-foreground">Ajustes no Período</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Top Consumo */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Insumos Mais Consumidos</CardTitle>
+          <CardDescription>Ranking de retiradas no período</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {topConsumo.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-8">Nenhuma saída registrada no período.</p>
+          ) : (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topConsumo} layout="vertical" margin={{ left: 100 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" />
+                  <YAxis type="category" dataKey="nome" tick={{ fontSize: 12 }} width={100} />
+                  <Tooltip />
+                  <Bar dataKey="total" fill={COLORS.primary} radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Volume por Tipo de Saída */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Volume por Tipo de Saída</CardTitle>
+          <CardDescription>Unidades movimentadas no período por tipo</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {volumeData.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-8">Nenhuma saída registrada no período.</p>
+          ) : (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={volumeData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="value" name="Unidades" radius={[4, 4, 0, 0]}>
+                    {volumeData.map((entry, index) => (
+                      <Cell key={`vol-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Movimentação por Colaborador + Top Descartes */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-primary" />
+              Movimentação por Colaborador
+            </CardTitle>
+            <CardDescription>Ranking de saídas no período</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {movimentacaoColaborador.length === 0 ? (
+              <p className="text-muted-foreground text-sm text-center py-4">Nenhuma movimentação no período.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Colaborador</TableHead>
+                      <TableHead className="text-right">Uso</TableHead>
+                      <TableHead className="text-right">Desc.</TableHead>
+                      <TableHead className="text-right">Ajuste</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {movimentacaoColaborador.map((c) => (
+                      <TableRow key={c.nome}>
+                        <TableCell className="font-medium">{c.nome}</TableCell>
+                        <TableCell className="text-right">{c.uso}</TableCell>
+                        <TableCell className="text-right">{c.descarte}</TableCell>
+                        <TableCell className="text-right">{c.ajuste}</TableCell>
+                        <TableCell className="text-right font-bold">{c.total}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              Produtos Mais Descartados
+            </CardTitle>
+            <CardDescription>Top descartes no período</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {topDescartes.length === 0 ? (
+              <p className="text-muted-foreground text-sm text-center py-4">Nenhum descarte no período.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Produto</TableHead>
+                      <TableHead className="text-right">Qtd</TableHead>
+                      <TableHead>Motivo Principal</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {topDescartes.map((d) => (
+                      <TableRow key={d.nome}>
+                        <TableCell className="font-medium">{d.nome}</TableCell>
+                        <TableCell className="text-right">{d.total}</TableCell>
+                        <TableCell>{d.motivo}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Atividade Recente */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="w-5 h-5 text-primary" />
+            Atividade Recente
+          </CardTitle>
+          <CardDescription>Últimas movimentações no período</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {atividadeRecente.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-4">Nenhuma atividade registrada no período.</p>
+          ) : (
+            <div className="space-y-3">
+              {atividadeRecente.map((a) => (
+                <div key={a.id} className="flex items-center gap-4 p-3 rounded-lg bg-secondary/50">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{a.insumoNome}</p>
+                    <p className="text-xs text-muted-foreground">{a.responsavel}</p>
+                  </div>
+                  <Badge variant={a.tipo === 'descarte' ? 'destructive' : a.tipo === 'ajuste' ? 'secondary' : 'default'}>
+                    {TIPO_SAIDA_LABELS[a.tipo] ?? a.tipo}
+                  </Badge>
+                  <span className="text-sm font-medium tabular-nums">{a.quantidade} un.</span>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {format(toSP(a.dataRetirada), "dd/MM HH:mm", { locale: ptBR })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Comparativo entre Unidades */}
       {comparativo && comparativo.unidades.length > 1 && (
@@ -736,7 +766,7 @@ export default function RelatoriosPage() {
               <Building2 className="w-5 h-5 text-primary" />
               Comparativo entre Unidades
             </CardTitle>
-            <CardDescription>Métricas lado a lado de cada unidade (mês atual)</CardDescription>
+            <CardDescription>Métricas lado a lado de cada unidade (período selecionado)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -785,7 +815,14 @@ export default function RelatoriosPage() {
         </Card>
       )}
 
-      {/* Previsão de Reposição */}
+      {/* ─────────────────────────────────────────────
+           PREVISÃO DE REPOSIÇÃO (janela fixa de 90d)
+         ───────────────────────────────────────────── */}
+      <SectionHeading
+        title="Previsão de Reposição"
+        subtitle="Janela fixa de 90 dias — independente do filtro acima"
+      />
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

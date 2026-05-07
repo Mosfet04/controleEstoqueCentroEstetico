@@ -30,7 +30,7 @@ export async function getDashboardData(referenceDate?: Date, unidadeId?: string,
     prisma.saidaInsumo.groupBy({
       by: ['insumoId'],
       _sum: { quantidade: true },
-      where: { ...unitFilter },
+      where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth } },
       orderBy: { _sum: { quantidade: 'desc' } },
       take: 5,
     }),
@@ -144,7 +144,7 @@ export async function getDashboardData(referenceDate?: Date, unidadeId?: string,
     }),
     prisma.saidaInsumo.findMany({
       take: 10,
-      where: unitFilter,
+      where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth } },
       orderBy: { dataRetirada: 'desc' },
       include: {
         insumo: { select: { nome: true } },
