@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -10,7 +10,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { dashboardApi, DashboardApi, comparativoApi, ComparativoApi, previsaoApi, PrevisaoItem, ApiError } from '@/lib/api'
 import { format, differenceInDays, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { AlertTriangle, Clock, TrendingUp, Package, Trash2, SlidersHorizontal, Users, Activity, XCircle, Download, Loader2, CalendarIcon, Building2, Gauge, FileSpreadsheet, FileText, ChevronDown } from 'lucide-react'
+import { AlertTriangle, Clock, TrendingUp, Package, Trash2, SlidersHorizontal, Users, Activity, XCircle, Download, Loader2, CalendarIcon, Building2, Gauge, FileSpreadsheet, FileText, ChevronDown, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { toSP, nowSP } from '@/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -20,6 +20,8 @@ import { useAuth } from '@/contexts/auth-context'
 import { COR_CHART_MAP } from '@/lib/types'
 
 type StatusEstoque = 'bom' | 'atencao' | 'critico'
+type SortField = keyof Pick<PrevisaoItem, 'nome' | 'lote' | 'unidadeNome' | 'quantidade' | 'mediaDiaria' | 'diasRestantes'>
+type SortDir = 'asc' | 'desc' | null
 
 const STATUS_LABELS: Record<StatusEstoque, string> = {
   bom: 'Bom',
@@ -104,13 +106,15 @@ export default function RelatoriosPage() {
   const [downloadingFormat, setDownloadingFormat] = useState<'xlsx' | 'pdf' | null>(null)
   const { unidadeAtiva } = useUnidade()
 
-  // Seções colapsáveis — todas abertas por padrão
-  const [estadoAtualOpen, setEstadoAtualOpen] = useState(true)
-  const [movimentacoesOpen, setMovimentacoesOpen] = useState(true)
-  const [previsaoOpen, setPrevisaoOpen] = useState(true)
+  // Seções colapsáveis — todas fechadas ao abrir a página
+  const [estadoAtualOpen, setEstadoAtualOpen] = useState(false)
+  const [movimentacoesOpen, setMovimentacoesOpen] = useState(false)
+  const [previsaoOpen, setPrevisaoOpen] = useState(false)
 
-  // Paginação da previsão
+  // Paginação e ordenação da previsão
   const [previsaoPage, setPrevisaoPage] = useState(0)
+  const [sortField, setSortField] = useState<SortField | null>(null)
+  const [sortDir, setSortDir] = useState<SortDir>(null)
 
   const now = nowSP()
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(now), 'yyyy-MM-dd'))
@@ -150,6 +154,63 @@ export default function RelatoriosPage() {
       setPrevisao([])
     })
   }, [])
+
+  // Ciclagem de ordenação: asc → desc → padrão → asc → ...
+  const handleSort = useCallback((field: SortField) => {
+    setSortField((prev) => {
+      if (prev !== field) {
+        setSortDir('asc')
+        return field
+      }
+      setSortDir((dir) => {
+        if (dir === 'asc') return 'desc'
+        // desc → reset
+        setSortField(null)
+        return null
+      })
+      return prev
+    })
+    setPrevisaoPage(0)
+  }, [])
+
+  // Ordenação aplicada sobre todos os registros antes da paginação
+  const previsaoSorted = useMemo<PrevisaoItem[]>(() => {
+    if (!previsao) return []
+    if (!sortField || !sortDir) return previsao
+
+    return [...previsao].sort((a, b) => {
+      const aVal = a[sortField]
+      const bVal = b[sortField]
+
+      // null sempre vai para o final independente da direção
+      if (aVal === null && bVal === null) return 0
+      if (aVal === null) return 1
+      if (bVal === null) return -1
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        const cmp = aVal.localeCompare(bVal, 'pt-BR', { sensitivity: 'base' })
+        return sortDir === 'asc' ? cmp : -cmp
+      }
+
+      const cmp = (aVal as number) - (bVal as number)
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }, [previsao, sortField, sortDir])
+
+  const previsaoTotal = previsaoSorted.length
+  const previsaoTotalPages = Math.max(1, Math.ceil(previsaoTotal / PREVISAO_PAGE_SIZE))
+  const previsaoSlice = previsaoSorted.slice(
+    previsaoPage * PREVISAO_PAGE_SIZE,
+    (previsaoPage + 1) * PREVISAO_PAGE_SIZE,
+  )
+
+  // Ícone de ordenação para cada coluna
+  const sortIcon = (field: SortField) => {
+    if (sortField !== field) return <ArrowUpDown className="w-3 h-3 opacity-30 shrink-0" />
+    return sortDir === 'asc'
+      ? <ArrowUp className="w-3 h-3 text-primary shrink-0" />
+      : <ArrowDown className="w-3 h-3 text-primary shrink-0" />
+  }
 
   const handleDownload = useCallback(async (fmt: 'xlsx' | 'pdf') => {
     setDownloadingFormat(fmt)
@@ -238,13 +299,6 @@ export default function RelatoriosPage() {
 
   const periodoLabel = `${format(toSP(new Date(appliedFrom)), 'dd/MM/yyyy', { locale: ptBR })} a ${format(toSP(new Date(appliedTo)), 'dd/MM/yyyy', { locale: ptBR })}`
 
-  const previsaoTotal = previsao?.length ?? 0
-  const previsaoTotalPages = Math.max(1, Math.ceil(previsaoTotal / PREVISAO_PAGE_SIZE))
-  const previsaoSlice = previsao?.slice(
-    previsaoPage * PREVISAO_PAGE_SIZE,
-    (previsaoPage + 1) * PREVISAO_PAGE_SIZE,
-  ) ?? []
-
   return (
     <div className="space-y-6">
       {/* Cabeçalho */}
@@ -322,7 +376,6 @@ export default function RelatoriosPage() {
 
       {estadoAtualOpen && (
         <div className="space-y-6">
-          {/* Cards de resumo */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <Card>
               <CardContent className="p-4">
@@ -391,7 +444,6 @@ export default function RelatoriosPage() {
             </Card>
           </div>
 
-          {/* Distribuições */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
@@ -402,16 +454,7 @@ export default function RelatoriosPage() {
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie
-                        data={tipoData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                        label={({ name, value }) => `${name}: ${value}`}
-                      >
+                      <Pie data={tipoData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
                         {tipoData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
@@ -433,16 +476,7 @@ export default function RelatoriosPage() {
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie
-                        data={statusData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                        label={({ name, value }) => `${name}: ${value}`}
-                      >
+                      <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
                         {statusData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
@@ -456,7 +490,6 @@ export default function RelatoriosPage() {
             </Card>
           </div>
 
-          {/* Estoque Baixo + Vencimentos */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
@@ -524,7 +557,6 @@ export default function RelatoriosPage() {
             </Card>
           </div>
 
-          {/* Insumos Zerados + Fornecedores */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
@@ -592,7 +624,6 @@ export default function RelatoriosPage() {
 
       {movimentacoesOpen && (
         <div className="space-y-6">
-          {/* Cards saídas/descartes/ajustes */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card>
               <CardContent className="p-4">
@@ -635,7 +666,6 @@ export default function RelatoriosPage() {
             </Card>
           </div>
 
-          {/* Top Consumo */}
           <Card>
             <CardHeader>
               <CardTitle>Insumos Mais Consumidos</CardTitle>
@@ -660,7 +690,6 @@ export default function RelatoriosPage() {
             </CardContent>
           </Card>
 
-          {/* Volume por Tipo de Saída */}
           <Card>
             <CardHeader>
               <CardTitle>Volume por Tipo de Saída</CardTitle>
@@ -689,7 +718,6 @@ export default function RelatoriosPage() {
             </CardContent>
           </Card>
 
-          {/* Movimentação por Colaborador + Top Descartes */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
@@ -768,7 +796,6 @@ export default function RelatoriosPage() {
             </Card>
           </div>
 
-          {/* Atividade Recente */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -802,7 +829,6 @@ export default function RelatoriosPage() {
             </CardContent>
           </Card>
 
-          {/* Comparativo entre Unidades */}
           {comparativo && comparativo.unidades.length > 1 && (
             <Card>
               <CardHeader>
@@ -834,14 +860,10 @@ export default function RelatoriosPage() {
                           <TableCell className="text-right">{u.totalInsumos}</TableCell>
                           <TableCell className="text-right">{u.insumosAtivos}</TableCell>
                           <TableCell className="text-right">
-                            {u.insumosCriticos > 0 ? (
-                              <Badge variant="destructive">{u.insumosCriticos}</Badge>
-                            ) : u.insumosCriticos}
+                            {u.insumosCriticos > 0 ? <Badge variant="destructive">{u.insumosCriticos}</Badge> : u.insumosCriticos}
                           </TableCell>
                           <TableCell className="text-right">
-                            {u.insumosVencendo > 0 ? (
-                              <Badge variant="secondary">{u.insumosVencendo}</Badge>
-                            ) : u.insumosVencendo}
+                            {u.insumosVencendo > 0 ? <Badge variant="secondary">{u.insumosVencendo}</Badge> : u.insumosVencendo}
                           </TableCell>
                           <TableCell className="text-right">{u.saidasMes}</TableCell>
                           <TableCell className="text-right">{u.descartesMes}</TableCell>
@@ -894,12 +916,27 @@ export default function RelatoriosPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Insumo</TableHead>
-                        <TableHead className="hidden sm:table-cell">Lote</TableHead>
-                        <TableHead className="hidden md:table-cell">Unidade</TableHead>
-                        <TableHead className="text-right">Estoque</TableHead>
-                        <TableHead className="text-right hidden sm:table-cell">Média/dia</TableHead>
-                        <TableHead className="text-right">Dias Restantes</TableHead>
+                        {(
+                          [
+                            { field: 'nome', label: 'Insumo', cls: '' },
+                            { field: 'lote', label: 'Lote', cls: 'hidden sm:table-cell' },
+                            { field: 'unidadeNome', label: 'Unidade', cls: 'hidden md:table-cell' },
+                            { field: 'quantidade', label: 'Estoque', cls: 'text-right' },
+                            { field: 'mediaDiaria', label: 'Média/dia', cls: 'text-right hidden sm:table-cell' },
+                            { field: 'diasRestantes', label: 'Dias Restantes', cls: 'text-right' },
+                          ] as { field: SortField; label: string; cls: string }[]
+                        ).map(({ field, label, cls }) => (
+                          <TableHead
+                            key={field}
+                            onClick={() => handleSort(field)}
+                            className={`cursor-pointer select-none whitespace-nowrap hover:bg-muted/50 transition-colors ${cls}`}
+                          >
+                            <span className="flex items-center gap-1 justify-start">
+                              {label}
+                              {sortIcon(field)}
+                            </span>
+                          </TableHead>
+                        ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
