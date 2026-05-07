@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
 import { prisma } from '@/lib/prisma'
 import { requireAuth, isUser } from '@/lib/auth-helpers'
+import { normalizeName } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
   const user = await requireAuth(request)
@@ -44,27 +45,37 @@ export async function GET(request: NextRequest) {
     })
 
     const grouped = new Map<string, {
-      fornecedor: string
-      produto: string
+      fornecedorVariations: Map<string, number>
+      produtoVariations: Map<string, number>
       tipoNome: string
       precos: number[]
       ultimaEntrada: Date | null
     }>()
 
     for (const insumo of insumos) {
-      const key = `${insumo.fornecedor}::${insumo.nome}`
+      const fornecedorKey = normalizeName(insumo.fornecedor)
+      const produtoKey = normalizeName(insumo.nome)
+      const key = `${fornecedorKey}::${produtoKey}`
       const existing = grouped.get(key)
       const preco = Number(insumo.precoUnitario)
 
       if (existing) {
         existing.precos.push(preco)
+        existing.fornecedorVariations.set(
+          insumo.fornecedor,
+          (existing.fornecedorVariations.get(insumo.fornecedor) ?? 0) + 1
+        )
+        existing.produtoVariations.set(
+          insumo.nome,
+          (existing.produtoVariations.get(insumo.nome) ?? 0) + 1
+        )
         if (!existing.ultimaEntrada || insumo.dataEntrada > existing.ultimaEntrada) {
           existing.ultimaEntrada = insumo.dataEntrada
         }
       } else {
         grouped.set(key, {
-          fornecedor: insumo.fornecedor,
-          produto: insumo.nome,
+          fornecedorVariations: new Map([[insumo.fornecedor, 1]]),
+          produtoVariations: new Map([[insumo.nome, 1]]),
           tipoNome: insumo.tipoInsumo.nome,
           precos: [preco],
           ultimaEntrada: insumo.dataEntrada,
@@ -72,9 +83,21 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const pickBestDisplay = (variations: Map<string, number>): string => {
+      let best: string | null = null
+      let bestCount = -1
+      for (const [name, count] of variations.entries()) {
+        if (count > bestCount || (count === bestCount && (best === null || name < best))) {
+          best = name
+          bestCount = count
+        }
+      }
+      return best ?? ''
+    }
+
     const result = Array.from(grouped.values()).map((g) => ({
-      fornecedor: g.fornecedor,
-      produto: g.produto,
+      fornecedor: pickBestDisplay(g.fornecedorVariations),
+      produto: pickBestDisplay(g.produtoVariations),
       tipo: g.tipoNome,
       entradas: g.precos.length,
       precoMedio: Math.round((g.precos.reduce((a, b) => a + b, 0) / g.precos.length) * 100) / 100,

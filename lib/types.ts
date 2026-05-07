@@ -4,6 +4,7 @@
 export type UserRole = 'admin' | 'clinico'
 export type StatusEstoque = 'bom' | 'atencao' | 'critico'
 export type TipoSaida = 'uso' | 'descarte' | 'ajuste'
+export type CategoriaSaida = 'uso' | 'descarte' | 'ajuste'
 
 export const STATUS_LABELS: Record<StatusEstoque, string> = {
   bom: 'Bom',
@@ -12,6 +13,12 @@ export const STATUS_LABELS: Record<StatusEstoque, string> = {
 }
 
 export const TIPO_SAIDA_LABELS: Record<TipoSaida, string> = {
+  uso: 'Uso Clínico',
+  descarte: 'Descarte',
+  ajuste: 'Ajuste de Estoque',
+}
+
+export const CATEGORIA_SAIDA_LABELS: Record<CategoriaSaida, string> = {
   uso: 'Uso Clínico',
   descarte: 'Descarte',
   ajuste: 'Ajuste de Estoque',

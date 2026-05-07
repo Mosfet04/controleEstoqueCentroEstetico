@@ -29,7 +29,6 @@ import { useUnidade } from '@/contexts/unidade-context'
 
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dashboard/saidas', label: 'Saídas', icon: PackageMinus },
   { href: '/dashboard/fornecedores', label: 'Fornecedores', icon: Store },
 ]
 
@@ -46,6 +45,12 @@ const insumoSubItems = [
   { href: '/dashboard/insumos/tipos', label: 'Tipos de Insumo', icon: Tags, adminOnly: true },
 ]
 
+// Sub-menu de Saídas
+const saidaSubItems = [
+  { href: '/dashboard/saidas', label: 'Saídas', icon: PackageMinus },
+  { href: '/dashboard/saidas/tipos', label: 'Tipos de Saída', icon: Tags, adminOnly: true },
+]
+
 export function AppSidebar() {
   const pathname = usePathname()
   const { user, signOut } = useAuth()
@@ -54,6 +59,9 @@ export function AppSidebar() {
   const [insumosExpanded, setInsumosExpanded] = useState(
     pathname.startsWith('/dashboard/insumos')
   )
+  const [saidasExpanded, setSaidasExpanded] = useState(
+    pathname.startsWith('/dashboard/saidas')
+  )
   const [isPending, startTransition] = useTransition()
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null)
 
@@ -61,9 +69,8 @@ export function AppSidebar() {
 
   useEffect(() => {
     setNavigatingTo(null)
-    if (pathname.startsWith('/dashboard/insumos')) {
-      setInsumosExpanded(true)
-    }
+    if (pathname.startsWith('/dashboard/insumos')) setInsumosExpanded(true)
+    if (pathname.startsWith('/dashboard/saidas')) setSaidasExpanded(true)
   }, [pathname])
 
   const handleNavigation = (href: string) => {
@@ -80,7 +87,10 @@ export function AppSidebar() {
   }
 
   const allMenuItems = user?.role === 'admin' ? [...menuItems, ...adminItems] : menuItems
-  const visibleSubItems = insumoSubItems.filter(
+  const visibleInsumoSubItems = insumoSubItems.filter(
+    (item) => !item.adminOnly || user?.role === 'admin'
+  )
+  const visibleSaidaSubItems = saidaSubItems.filter(
     (item) => !item.adminOnly || user?.role === 'admin'
   )
 
@@ -202,7 +212,60 @@ export function AppSidebar() {
 
             {insumosExpanded && (
               <ul className="mt-1 ml-4 pl-3 border-l border-sidebar-border space-y-1">
-                {visibleSubItems.map((sub) => {
+                {visibleInsumoSubItems.map((sub) => {
+                  const isActive = pathname === sub.href
+                  const isNavigating = navigatingTo === sub.href
+                  return (
+                    <li key={sub.href}>
+                      <button
+                        onClick={() => handleNavigation(sub.href)}
+                        disabled={isNavigating}
+                        className={cn(
+                          'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left',
+                          isActive
+                            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+                          isNavigating && 'opacity-70'
+                        )}
+                      >
+                        {isNavigating ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <sub.icon className="w-4 h-4" />
+                        )}
+                        {sub.label}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </li>
+
+          {/* Saídas — sub-menu colapsável */}
+          <li>
+            <button
+              onClick={() => setSaidasExpanded((prev) => !prev)}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left',
+                pathname.startsWith('/dashboard/saidas')
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+              )}
+            >
+              <PackageMinus className="w-5 h-5" />
+              Saídas
+              <ChevronRight
+                className={cn(
+                  'ml-auto w-4 h-4 transition-transform duration-200',
+                  saidasExpanded && 'rotate-90'
+                )}
+              />
+            </button>
+
+            {saidasExpanded && (
+              <ul className="mt-1 ml-4 pl-3 border-l border-sidebar-border space-y-1">
+                {visibleSaidaSubItems.map((sub) => {
                   const isActive = pathname === sub.href
                   const isNavigating = navigatingTo === sub.href
                   return (

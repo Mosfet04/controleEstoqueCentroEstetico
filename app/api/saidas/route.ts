@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
         insumo: { select: { nome: true, lote: true } },
         user: { select: { name: true, email: true } },
         unidade: { select: { nome: true } },
+        tipoSaida: { select: { id: true, nome: true, slug: true, categoria: true, cor: true } },
       },
       orderBy: { dataRetirada: 'desc' },
     })
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
       insumoNome: s.insumo.nome,
       insumoLote: s.insumo.lote,
       quantidade: s.quantidade,
-      tipo: s.tipo,
+      tipoSaida: s.tipoSaida,
       motivo: s.motivo,
       responsavel: s.user.name,
       observacao: s.observacao,
@@ -78,7 +79,19 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const { insumoId, quantidade, tipo, motivo, observacao } = parsed.data
+      const { insumoId, quantidade, tipoSaidaId, motivo, observacao } = parsed.data
+
+      const tipoSaida = await prisma.tipoSaida.findUnique({ where: { id: tipoSaidaId } })
+      if (!tipoSaida || !tipoSaida.ativo) {
+        return NextResponse.json({ error: 'Tipo de saída inválido ou inativo' }, { status: 422 })
+      }
+
+      if (tipoSaida.categoria !== 'uso' && (!motivo || motivo.trim().length === 0)) {
+        return NextResponse.json(
+          { error: 'Motivo é obrigatório para descarte e ajuste de estoque' },
+          { status: 422 }
+        )
+      }
 
       // Atomic: verify stock and create saída in a single transaction
       const result = await prisma.$transaction(async (tx) => {
@@ -106,7 +119,7 @@ export async function POST(request: NextRequest) {
             userId: user.id,
             unidadeId,
             quantidade,
-            tipo: tipo ?? 'uso',
+            tipoSaidaId,
             motivo: motivo ?? null,
             observacao: observacao ?? null,
             dataRetirada: nowSP(),
@@ -114,14 +127,15 @@ export async function POST(request: NextRequest) {
           include: {
             insumo: { select: { nome: true, lote: true } },
             user: { select: { name: true } },
+            tipoSaida: { select: { id: true, nome: true, slug: true, categoria: true, cor: true } },
           },
         })
       })
 
       Sentry.addBreadcrumb({
-        message: `Saída registrada: ${result.insumo.nome} (${quantidade} unidades) [${tipo ?? 'uso'}]`,
+        message: `Saída registrada: ${result.insumo.nome} (${quantidade} unidades) [${tipoSaida.categoria}]`,
         category: 'saida',
-        data: { id: result.id, insumoId, userId: user.id, quantidade, tipo },
+        data: { id: result.id, insumoId, userId: user.id, quantidade, tipoSaidaId },
       })
 
       return NextResponse.json(
@@ -131,7 +145,7 @@ export async function POST(request: NextRequest) {
           insumoNome: result.insumo.nome,
           insumoLote: result.insumo.lote,
           quantidade: result.quantidade,
-          tipo: result.tipo,
+          tipoSaida: result.tipoSaida,
           motivo: result.motivo,
           responsavel: result.user.name,
           observacao: result.observacao,

@@ -13,19 +13,28 @@ export async function getDashboardData(referenceDate?: Date, unidadeId?: string,
 
   const unitFilter = unidadeId ? { unidadeId } : {}
 
+  // Pre-fetch tipo saida map for category-based filtering
+  const tiposSaida = await prisma.tipoSaida.findMany({ select: { id: true, categoria: true } })
+  const tiposPorCategoria = {
+    uso: tiposSaida.filter((t) => t.categoria === 'uso').map((t) => t.id),
+    descarte: tiposSaida.filter((t) => t.categoria === 'descarte').map((t) => t.id),
+    ajuste: tiposSaida.filter((t) => t.categoria === 'ajuste').map((t) => t.id),
+  }
+  const tipoIdParaCategoria = new Map(tiposSaida.map((t) => [t.id, t.categoria as 'uso' | 'descarte' | 'ajuste']))
+
   const [allInsumos, saidasMes, descartesMes, ajustesMes, topSaidas] = await Promise.all([
     prisma.insumo.findMany({
       where: unitFilter,
       include: { tipoInsumo: { select: { slug: true, nome: true, cor: true } } },
     }),
     prisma.saidaInsumo.count({
-      where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'uso' },
+      where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipoSaidaId: { in: tiposPorCategoria.uso } },
     }),
     prisma.saidaInsumo.count({
-      where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'descarte' },
+      where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipoSaidaId: { in: tiposPorCategoria.descarte } },
     }),
     prisma.saidaInsumo.count({
-      where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipo: 'ajuste' },
+      where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth }, tipoSaidaId: { in: tiposPorCategoria.ajuste } },
     }),
     prisma.saidaInsumo.groupBy({
       by: ['insumoId'],
@@ -115,12 +124,12 @@ export async function getDashboardData(referenceDate?: Date, unidadeId?: string,
 
   const [movColabRaw, volTipoRaw, descartesRaw, fornecedoresRaw, atividadeRaw] = await Promise.all([
     prisma.saidaInsumo.groupBy({
-      by: ['userId', 'tipo'],
+      by: ['userId', 'tipoSaidaId'],
       _sum: { quantidade: true },
       where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth } },
     }),
     prisma.saidaInsumo.groupBy({
-      by: ['tipo'],
+      by: ['tipoSaidaId'],
       _sum: { quantidade: true },
       where: { ...unitFilter, dataRetirada: { gte: startOfMonth, lte: endOfMonth } },
     }),
@@ -129,7 +138,7 @@ export async function getDashboardData(referenceDate?: Date, unidadeId?: string,
       _sum: { quantidade: true },
       where: {
         ...unitFilter,
-        tipo: 'descarte',
+        tipoSaidaId: { in: tiposPorCategoria.descarte },
         dataRetirada: { gte: startOfMonth, lte: endOfMonth },
       },
       orderBy: { _sum: { quantidade: 'desc' } },
@@ -149,6 +158,7 @@ export async function getDashboardData(referenceDate?: Date, unidadeId?: string,
       include: {
         insumo: { select: { nome: true } },
         user: { select: { name: true } },
+        tipoSaida: { select: { categoria: true, nome: true } },
       },
     }),
   ])
@@ -167,24 +177,30 @@ export async function getDashboardData(referenceDate?: Date, unidadeId?: string,
     { nome: string; uso: number; descarte: number; ajuste: number }
   >()
   for (const row of movColabRaw) {
+    const categoria = tipoIdParaCategoria.get(row.tipoSaidaId) ?? 'uso'
     const existing = colabPivot.get(row.userId) ?? {
       nome: colabUserMap[row.userId] ?? 'Desconhecido',
       uso: 0,
       descarte: 0,
       ajuste: 0,
     }
-    if (row.tipo === 'uso') existing.uso = row._sum.quantidade ?? 0
-    else if (row.tipo === 'descarte') existing.descarte = row._sum.quantidade ?? 0
-    else if (row.tipo === 'ajuste') existing.ajuste = row._sum.quantidade ?? 0
+    if (categoria === 'uso') existing.uso += row._sum.quantidade ?? 0
+    else if (categoria === 'descarte') existing.descarte += row._sum.quantidade ?? 0
+    else if (categoria === 'ajuste') existing.ajuste += row._sum.quantidade ?? 0
     colabPivot.set(row.userId, existing)
   }
   const movimentacaoColaborador = Array.from(colabPivot.values())
     .map((c) => ({ ...c, total: c.uso + c.descarte + c.ajuste }))
     .sort((a, b) => b.total - a.total)
 
-  const volumePorTipo = volTipoRaw.map((r) => ({
-    tipo: r.tipo,
-    total: r._sum.quantidade ?? 0,
+  const volumePorCategoria = { uso: 0, descarte: 0, ajuste: 0 }
+  for (const r of volTipoRaw) {
+    const categoria = tipoIdParaCategoria.get(r.tipoSaidaId) ?? 'uso'
+    volumePorCategoria[categoria] += r._sum.quantidade ?? 0
+  }
+  const volumePorTipo = (['uso', 'descarte', 'ajuste'] as const).map((tipo) => ({
+    tipo,
+    total: volumePorCategoria[tipo],
   }))
 
   const descarteInsumoIds = descartesRaw.map((r) => r.insumoId)
@@ -197,7 +213,7 @@ export async function getDashboardData(referenceDate?: Date, unidadeId?: string,
           }),
           prisma.saidaInsumo.findMany({
             where: {
-              tipo: 'descarte',
+              tipoSaidaId: { in: tiposPorCategoria.descarte },
               insumoId: { in: descarteInsumoIds },
               ...unitFilter,
               dataRetirada: { gte: startOfMonth, lte: endOfMonth },
@@ -261,7 +277,8 @@ export async function getDashboardData(referenceDate?: Date, unidadeId?: string,
     id: s.id,
     insumoNome: s.insumo.nome,
     responsavel: s.user.name,
-    tipo: s.tipo,
+    tipo: s.tipoSaida.categoria,
+    tipoNome: s.tipoSaida.nome,
     quantidade: s.quantidade,
     dataRetirada: s.dataRetirada.toISOString(),
   }))

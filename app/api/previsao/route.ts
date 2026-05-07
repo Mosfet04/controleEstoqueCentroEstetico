@@ -35,12 +35,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([])
     }
 
-    // Aggregate consumption (tipo = 'uso') per insumo over last 90 days
+    // Aggregate consumption (categoria = 'uso') per insumo over last 90 days
+    const tiposUso = await prisma.tipoSaida.findMany({
+      where: { categoria: 'uso' },
+      select: { id: true },
+    })
+    const usoIds = tiposUso.map((t) => t.id)
+
     const saidas = await prisma.saidaInsumo.groupBy({
       by: ['insumoId'],
       where: {
         insumoId: { in: insumos.map((i) => i.id) },
-        tipo: 'uso',
+        tipoSaidaId: { in: usoIds },
         dataRetirada: { gte: ninetyDaysAgo },
       },
       _sum: { quantidade: true },

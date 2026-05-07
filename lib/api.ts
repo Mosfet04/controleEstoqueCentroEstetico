@@ -101,6 +101,39 @@ export const tiposInsumoApi = {
 }
 
 // ---------------------------------------------------------------------------
+// Tipos de Saída (dinâmico)
+// ---------------------------------------------------------------------------
+
+export interface TipoSaidaApi {
+  id: string
+  nome: string
+  slug: string
+  categoria: 'uso' | 'descarte' | 'ajuste'
+  cor: string
+  ativo: boolean
+  createdAt: string
+  updatedAt: string
+  _count?: { saidas: number }
+}
+
+export interface TipoSaidaPayload {
+  nome: string
+  slug: string
+  categoria: 'uso' | 'descarte' | 'ajuste'
+  cor: string
+}
+
+export const tiposSaidaApi = {
+  list: () => apiFetch<TipoSaidaApi[]>('/api/tipos-saida'),
+  create: (data: TipoSaidaPayload) =>
+    apiFetch<TipoSaidaApi>('/api/tipos-saida', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<Omit<TipoSaidaPayload, 'categoria'>> & { ativo?: boolean }) =>
+    apiFetch<TipoSaidaApi>(`/api/tipos-saida/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    apiFetch<{ success: boolean }>(`/api/tipos-saida/${id}`, { method: 'DELETE' }),
+}
+
+// ---------------------------------------------------------------------------
 // Insumos
 // ---------------------------------------------------------------------------
 
@@ -171,7 +204,13 @@ export interface SaidaApi {
   insumoNome: string
   insumoLote: string
   quantidade: number
-  tipo: 'uso' | 'descarte' | 'ajuste'
+  tipoSaida: {
+    id: string
+    nome: string
+    slug: string
+    categoria: 'uso' | 'descarte' | 'ajuste'
+    cor: string
+  }
   motivo?: string | null
   responsavel: string
   observacao?: string | null
@@ -185,7 +224,7 @@ export const saidasApi = {
   create: (data: {
     insumoId: string
     quantidade: number
-    tipo?: 'uso' | 'descarte' | 'ajuste'
+    tipoSaidaId: string
     motivo?: string
     observacao?: string
   }, unidadeOverride?: string) =>
@@ -267,6 +306,7 @@ export interface DashboardApi {
     insumoNome: string
     responsavel: string
     tipo: string
+    tipoNome?: string
     quantidade: number
     dataRetirada: string
   }[]

@@ -60,23 +60,34 @@ export type InsumoInput = z.infer<typeof insumoSchema>
 // Saída de Insumo
 // ---------------------------------------------------------------------------
 
-export const saidaSchema = z
-  .object({
-    insumoId: z.string().cuid({ message: 'ID de insumo inválido' }),
-    quantidade: z.number().int().min(1, 'Quantidade deve ser pelo menos 1'),
-    tipo: z.enum(['uso', 'descarte', 'ajuste']).default('uso'),
-    motivo: z.string().max(500).optional(),
-    observacao: z.string().max(500).optional(),
-  })
-  .refine(
-    (data) => data.tipo === 'uso' || (data.motivo !== undefined && data.motivo.trim().length > 0),
-    {
-      message: 'Motivo é obrigatório para descarte e ajuste de estoque',
-      path: ['motivo'],
-    }
-  )
+export const saidaSchema = z.object({
+  insumoId: z.string().cuid({ message: 'ID de insumo inválido' }),
+  tipoSaidaId: z.string().cuid({ message: 'Selecione um tipo de saída válido' }),
+  quantidade: z.number().int().min(1, 'Quantidade deve ser pelo menos 1'),
+  motivo: z.string().max(500).optional(),
+  observacao: z.string().max(500).optional(),
+})
 
 export type SaidaInput = z.infer<typeof saidaSchema>
+
+// ---------------------------------------------------------------------------
+// TipoSaida (dinâmico)
+// ---------------------------------------------------------------------------
+
+export const tipoSaidaSchema = z.object({
+  nome: z.string().min(1, 'Nome é obrigatório').max(100),
+  slug: z
+    .string()
+    .min(1, 'Slug é obrigatório')
+    .max(60)
+    .regex(/^[a-z0-9_]+$/, 'Slug deve conter apenas letras minúsculas, números e _'),
+  categoria: z.enum(['uso', 'descarte', 'ajuste']),
+  cor: z
+    .enum(['blue', 'gray', 'purple', 'green', 'red', 'yellow', 'pink', 'orange', 'indigo', 'teal'])
+    .default('blue'),
+})
+
+export type TipoSaidaInput = z.infer<typeof tipoSaidaSchema>
 
 // ---------------------------------------------------------------------------
 // Usuário (create/update)

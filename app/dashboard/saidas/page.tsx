@@ -29,9 +29,9 @@ import {
 } from '@/components/ui/table'
 import { FieldGroup, Field, FieldLabel, FieldError } from '@/components/ui/field'
 import { Badge } from '@/components/ui/badge'
-import { Plus, PackageMinus, Search, Trash2, SlidersHorizontal } from 'lucide-react'
-import { saidasApi, insumosApi, SaidaApi, InsumoApi, ApiError } from '@/lib/api'
-import { TipoSaida, TIPO_SAIDA_LABELS, MOTIVOS_DESCARTE, MOTIVOS_AJUSTE } from '@/lib/types'
+import { Plus, PackageMinus, Search } from 'lucide-react'
+import { saidasApi, insumosApi, tiposSaidaApi, SaidaApi, InsumoApi, TipoSaidaApi, ApiError } from '@/lib/api'
+import { CategoriaSaida, CATEGORIA_SAIDA_LABELS, MOTIVOS_DESCARTE, MOTIVOS_AJUSTE, COR_BADGE_MAP } from '@/lib/types'
 import { useAuth } from '@/contexts/auth-context'
 import { useUnidade } from '@/contexts/unidade-context'
 import { format } from 'date-fns'
@@ -43,7 +43,7 @@ interface SaidaFormData {
   unidadeId: string
   insumoId: string
   quantidade: number
-  tipo: TipoSaida
+  tipoSaidaId: string
   motivo: string
   observacao: string
 }
@@ -52,18 +52,12 @@ const initialFormData: SaidaFormData = {
   unidadeId: '',
   insumoId: '',
   quantidade: 1,
-  tipo: 'uso',
+  tipoSaidaId: '',
   motivo: '',
   observacao: '',
 }
 
-const TIPO_BADGE: Record<TipoSaida, { label: string; className: string }> = {
-  uso:      { label: 'Uso Clínico',       className: 'bg-blue-100 text-blue-700 border-blue-200' },
-  descarte: { label: 'Descarte',          className: 'bg-red-100 text-red-700 border-red-200' },
-  ajuste:   { label: 'Ajuste de Estoque', className: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
-}
-
-const SUBMIT_LABELS: Record<TipoSaida, string> = {
+const SUBMIT_LABELS: Record<CategoriaSaida, string> = {
   uso:      'Registrar Saída',
   descarte: 'Registrar Descarte',
   ajuste:   'Registrar Ajuste',
@@ -74,8 +68,9 @@ export default function SaidasPage() {
   const { isGlobalView, unidades, unidadeAtiva } = useUnidade()
   const [saidas, setSaidas] = useState<SaidaApi[]>([])
   const [insumos, setInsumos] = useState<InsumoApi[]>([])
+  const [tiposSaida, setTiposSaida] = useState<TipoSaidaApi[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [tipoFiltro, setTipoFiltro] = useState<TipoSaida | 'todos'>('todos')
+  const [tipoFiltro, setTipoFiltro] = useState<string>('todos')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [formData, setFormData] = useState<SaidaFormData>(initialFormData)
   const [error, setError] = useState<string | null>(null)
@@ -105,7 +100,8 @@ export default function SaidasPage() {
 
   const handleOpenDialog = async () => {
     const defaultUnit = unidadeAtiva?.id ?? unidades.filter((u) => u.ativa)[0]?.id ?? ''
-    setFormData({ ...initialFormData, unidadeId: defaultUnit })
+    const defaultTipoSaida = tiposSaida.find((t) => t.categoria === 'uso') ?? tiposSaida[0]
+    setFormData({ ...initialFormData, unidadeId: defaultUnit, tipoSaidaId: defaultTipoSaida?.id ?? '' })
     setError(null)
     setIsDialogOpen(true)
     if (defaultUnit) await loadInsumosForUnit(defaultUnit)
@@ -113,6 +109,9 @@ export default function SaidasPage() {
 
   useEffect(() => {
     loadData()
+    tiposSaidaApi.list()
+      .then((tipos) => setTiposSaida(tipos.filter((t) => t.ativo)))
+      .catch(() => {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -120,13 +119,15 @@ export default function SaidasPage() {
     const matchSearch =
       saida.insumoNome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       saida.responsavel.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchTipo = tipoFiltro === 'todos' || saida.tipo === tipoFiltro
+    const matchTipo = tipoFiltro === 'todos' || saida.tipoSaida?.id === tipoFiltro
     return matchSearch && matchTipo
   })
 
   const selectedInsumo = insumos.find((i) => i.id === formData.insumoId)
-  const motivoObrigatorio = formData.tipo !== 'uso'
-  const motivoOpcoes = formData.tipo === 'descarte' ? MOTIVOS_DESCARTE : MOTIVOS_AJUSTE
+  const tipoSaidaSelecionado = tiposSaida.find((t) => t.id === formData.tipoSaidaId)
+  const categoriaAtual: CategoriaSaida = tipoSaidaSelecionado?.categoria ?? 'uso'
+  const motivoObrigatorio = categoriaAtual !== 'uso'
+  const motivoOpcoes = categoriaAtual === 'descarte' ? MOTIVOS_DESCARTE : MOTIVOS_AJUSTE
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -139,6 +140,11 @@ export default function SaidasPage() {
 
     if (!formData.insumoId) {
       setError('Selecione um insumo')
+      return
+    }
+
+    if (!formData.tipoSaidaId) {
+      setError('Selecione o tipo de saída')
       return
     }
 
@@ -157,11 +163,11 @@ export default function SaidasPage() {
       await saidasApi.create({
         insumoId: formData.insumoId,
         quantidade: formData.quantidade,
-        tipo: formData.tipo,
+        tipoSaidaId: formData.tipoSaidaId,
         motivo: formData.motivo.trim() || undefined,
         observacao: formData.observacao.trim() || undefined,
       }, formData.unidadeId)
-      const label = TIPO_SAIDA_LABELS[formData.tipo]
+      const label = tipoSaidaSelecionado?.nome ?? CATEGORIA_SAIDA_LABELS[categoriaAtual]
       toast.success(`${label} registrado com sucesso!`)
       setIsDialogOpen(false)
       setFormData(initialFormData)
@@ -228,32 +234,32 @@ export default function SaidasPage() {
                   </Select>
                 </Field>
 
-                {/* Tipo de saída */}
+                {/* Tipo de saída (dinâmico) */}
                 <Field>
                   <FieldLabel>Tipo de Saída</FieldLabel>
                   <Select
-                    value={formData.tipo}
+                    value={formData.tipoSaidaId}
                     onValueChange={(v) =>
-                      setFormData({ ...formData, tipo: v as TipoSaida, motivo: '' })
+                      setFormData({ ...formData, tipoSaidaId: v, motivo: '' })
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="uso">Uso Clínico</SelectItem>
-                      <SelectItem value="descarte">
-                        <span className="flex items-center gap-2">
-                          <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                          Descarte (vencimento / avaria)
-                        </span>
-                      </SelectItem>
-                      <SelectItem value="ajuste">
-                        <span className="flex items-center gap-2">
-                          <SlidersHorizontal className="w-3.5 h-3.5 text-yellow-500" />
-                          Ajuste de Estoque (desvio)
-                        </span>
-                      </SelectItem>
+                      {tiposSaida.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          <span className="flex items-center gap-2">
+                            <span className={`inline-block w-2 h-2 rounded-full ${COR_BADGE_MAP[t.cor]?.split(' ')[0]?.replace('bg-', 'bg-') ?? ''}`}
+                              style={{ background: undefined }}
+                            />
+                            {t.nome}
+                            <span className="text-xs text-muted-foreground">
+                              ({CATEGORIA_SAIDA_LABELS[t.categoria]})
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </Field>
@@ -279,12 +285,12 @@ export default function SaidasPage() {
                         ))}
                       </SelectContent>
                     </Select>
-                    {formData.tipo === 'descarte' && (
+                    {categoriaAtual === 'descarte' && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Registra que o responsável {user?.name ?? 'usuário atual'} descartou este produto.
                       </p>
                     )}
-                    {formData.tipo === 'ajuste' && (
+                    {categoriaAtual === 'ajuste' && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Use para corrigir consumo que ocorreu sem registro no sistema.
                       </p>
@@ -346,8 +352,6 @@ export default function SaidasPage() {
                   />
                 </Field>
 
-
-
                 {/* Observação (sempre opcional) */}
                 <Field>
                   <FieldLabel>Observação (opcional)</FieldLabel>
@@ -355,9 +359,9 @@ export default function SaidasPage() {
                     value={formData.observacao}
                     onChange={(e) => setFormData({ ...formData, observacao: e.target.value })}
                     placeholder={
-                      formData.tipo === 'uso'
+                      categoriaAtual === 'uso'
                         ? 'Ex: Procedimento facial paciente X'
-                        : formData.tipo === 'descarte'
+                        : categoriaAtual === 'descarte'
                         ? 'Ex: Frasco aberto há mais de 30 dias'
                         : 'Ex: Consumo estimado da semana passada'
                     }
@@ -381,14 +385,14 @@ export default function SaidasPage() {
                     className="flex-1"
                     disabled={isSubmitting}
                     variant={
-                      formData.tipo === 'descarte'
+                      categoriaAtual === 'descarte'
                         ? 'destructive'
-                        : formData.tipo === 'ajuste'
+                        : categoriaAtual === 'ajuste'
                         ? 'outline'
                         : 'default'
                     }
                   >
-                    {isSubmitting ? 'Salvando...' : SUBMIT_LABELS[formData.tipo]}
+                    {isSubmitting ? 'Salvando...' : SUBMIT_LABELS[categoriaAtual]}
                   </Button>
                 </div>
               </FieldGroup>
@@ -411,16 +415,16 @@ export default function SaidasPage() {
             </div>
             <Select
               value={tipoFiltro}
-              onValueChange={(v) => setTipoFiltro(v as TipoSaida | 'todos')}
+              onValueChange={(v) => setTipoFiltro(v)}
             >
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os tipos</SelectItem>
-                <SelectItem value="uso">Uso Clínico</SelectItem>
-                <SelectItem value="descarte">Descarte</SelectItem>
-                <SelectItem value="ajuste">Ajuste de Estoque</SelectItem>
+                {tiposSaida.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -458,43 +462,42 @@ export default function SaidasPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredSaidas.map((saida) => {
-                    const tipo = (saida.tipo ?? 'uso') as TipoSaida
-                    const badge = TIPO_BADGE[tipo]
-                    return (
-                      <TableRow key={saida.id}>
-                        <TableCell className="font-medium">
-                          <div>{saida.insumoNome}</div>
-                          <div className="text-xs text-muted-foreground">Lote: {saida.insumoLote}</div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={badge.className}>
-                            {badge.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold text-sm">
-                            -{saida.quantidade}
-                          </span>
-                        </TableCell>
-                        <TableCell>{saida.responsavel}</TableCell>
-                        {isGlobalView && (
-                          <TableCell className="text-muted-foreground text-sm">{saida.unidadeNome}</TableCell>
+                  filteredSaidas.map((saida) => (
+                    <TableRow key={saida.id}>
+                      <TableCell className="font-medium">
+                        <div>{saida.insumoNome}</div>
+                        <div className="text-xs text-muted-foreground">Lote: {saida.insumoLote}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={COR_BADGE_MAP[saida.tipoSaida?.cor ?? 'blue']}
+                        >
+                          {saida.tipoSaida?.nome ?? '-'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold text-sm">
+                          -{saida.quantidade}
+                        </span>
+                      </TableCell>
+                      <TableCell>{saida.responsavel}</TableCell>
+                      {isGlobalView && (
+                        <TableCell className="text-muted-foreground text-sm">{saida.unidadeNome}</TableCell>
+                      )}
+                      <TableCell className="whitespace-nowrap">
+                        {format(toSP(saida.dataRetirada), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {saida.motivo && (
+                          <span className="font-medium text-foreground">{saida.motivo}</span>
                         )}
-                        <TableCell className="whitespace-nowrap">
-                          {format(toSP(saida.dataRetirada), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {saida.motivo && (
-                            <span className="font-medium text-foreground">{saida.motivo}</span>
-                          )}
-                          {saida.motivo && saida.observacao && <span className="mx-1">·</span>}
-                          {saida.observacao && <span>{saida.observacao}</span>}
-                          {!saida.motivo && !saida.observacao && '-'}
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })
+                        {saida.motivo && saida.observacao && <span className="mx-1">·</span>}
+                        {saida.observacao && <span>{saida.observacao}</span>}
+                        {!saida.motivo && !saida.observacao && '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
@@ -504,4 +507,3 @@ export default function SaidasPage() {
     </div>
   )
 }
-

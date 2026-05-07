@@ -22,6 +22,13 @@ export async function GET(request: NextRequest) {
       : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
     const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
 
+    const tiposSaida = await prisma.tipoSaida.findMany({ select: { id: true, categoria: true } })
+    const tiposPorCategoria = {
+      uso: tiposSaida.filter((t) => t.categoria === 'uso').map((t) => t.id),
+      descarte: tiposSaida.filter((t) => t.categoria === 'descarte').map((t) => t.id),
+      ajuste: tiposSaida.filter((t) => t.categoria === 'ajuste').map((t) => t.id),
+    }
+
     const unidades = await prisma.unidade.findMany({
       where: { ativa: true },
       select: { id: true, nome: true },
@@ -33,13 +40,13 @@ export async function GET(request: NextRequest) {
         const [insumos, saidasMes, descartesMes, ajustesMes] = await Promise.all([
           prisma.insumo.findMany({ where: { unidadeId: u.id } }),
           prisma.saidaInsumo.count({
-            where: { unidadeId: u.id, dataRetirada: { gte: periodStart, lte: periodEnd }, tipo: 'uso' },
+            where: { unidadeId: u.id, dataRetirada: { gte: periodStart, lte: periodEnd }, tipoSaidaId: { in: tiposPorCategoria.uso } },
           }),
           prisma.saidaInsumo.count({
-            where: { unidadeId: u.id, dataRetirada: { gte: periodStart, lte: periodEnd }, tipo: 'descarte' },
+            where: { unidadeId: u.id, dataRetirada: { gte: periodStart, lte: periodEnd }, tipoSaidaId: { in: tiposPorCategoria.descarte } },
           }),
           prisma.saidaInsumo.count({
-            where: { unidadeId: u.id, dataRetirada: { gte: periodStart, lte: periodEnd }, tipo: 'ajuste' },
+            where: { unidadeId: u.id, dataRetirada: { gte: periodStart, lte: periodEnd }, tipoSaidaId: { in: tiposPorCategoria.ajuste } },
           }),
         ])
 

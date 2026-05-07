@@ -22,8 +22,7 @@ import { fornecedoresApi, FornecedorComparativo, ApiError } from '@/lib/api'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
-import { toSP } from '@/lib/utils'
-import { cn } from '@/lib/utils'
+import { toSP, cn, normalizeName } from '@/lib/utils'
 import {
   Bar,
   BarChart,
@@ -169,27 +168,43 @@ export default function FornecedoresPage() {
     setData(filtered)
   }, [filterProdutos, filterFornecedores, allData, datesReady])
 
-  // Available options from allData (unfiltered for the date range)
-  const availableProdutos = useMemo(
-    () => [...new Set(allData.map((d) => d.produto))].sort(),
-    [allData]
-  )
+  // Available options from allData (unfiltered for the date range) — deduplicated by normalized key
+  const availableProdutos = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const d of allData) {
+      const key = normalizeName(d.produto)
+      if (!map.has(key)) map.set(key, d.produto)
+    }
+    return [...map.values()].sort()
+  }, [allData])
 
-  const availableFornecedores = useMemo(
-    () => [...new Set(allData.map((d) => d.fornecedor))].sort(),
-    [allData]
-  )
+  const availableFornecedores = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const d of allData) {
+      const key = normalizeName(d.fornecedor)
+      if (!map.has(key)) map.set(key, d.fornecedor)
+    }
+    return [...map.values()].sort()
+  }, [allData])
 
-  // Unique products for chart grouping from filtered data
-  const produtos = useMemo(
-    () => [...new Set(data.map((d) => d.produto))].sort(),
-    [data]
-  )
+  // Unique products/fornecedores for chart grouping from filtered data — deduplicated
+  const produtos = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const d of data) {
+      const key = normalizeName(d.produto)
+      if (!map.has(key)) map.set(key, d.produto)
+    }
+    return [...map.values()].sort()
+  }, [data])
 
-  const fornecedores = useMemo(
-    () => [...new Set(data.map((d) => d.fornecedor))].sort(),
-    [data]
-  )
+  const fornecedores = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const d of data) {
+      const key = normalizeName(d.fornecedor)
+      if (!map.has(key)) map.set(key, d.fornecedor)
+    }
+    return [...map.values()].sort()
+  }, [data])
 
   // Find best price per product
   const bestPriceByProduct = useMemo(() => {
@@ -205,12 +220,13 @@ export default function FornecedoresPage() {
     return map
   }, [data])
 
-  // Chart data: group by product, each fornecedor as a bar
+  // Chart data: group by product (normalized), each fornecedor as a bar
   const chartData = useMemo(() => {
     return produtos.map((produto) => {
+      const produtoKey = normalizeName(produto)
       const row: Record<string, string | number> = { produto }
       for (const item of data) {
-        if (item.produto === produto && item.precoMedio != null) {
+        if (normalizeName(item.produto) === produtoKey && item.precoMedio != null) {
           row[item.fornecedor] = item.precoMedio
         }
       }
@@ -336,17 +352,24 @@ export default function FornecedoresPage() {
             <CardDescription>Comparação de preço médio unitário (R$) entre fornecedores</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[350px]">
+            <div
+              className="w-full"
+              style={{ height: `${Math.max(350, 280 + Math.ceil(fornecedores.length / 3) * 28)}px` }}
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="produto" tick={{ fontSize: 12 }} />
+                  <XAxis dataKey="produto" tick={{ fontSize: 12 }} interval={0} angle={-15} textAnchor="end" height={60} />
                   <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `R$${v}`} />
                   <Tooltip
                     formatter={(value: number) => [`R$ ${value.toFixed(2)}`, '']}
                     labelStyle={{ fontWeight: 'bold' }}
                   />
-                  <Legend />
+                  <Legend
+                    verticalAlign="bottom"
+                    wrapperStyle={{ paddingTop: 12, fontSize: 12, lineHeight: '1.5em' }}
+                    iconType="circle"
+                  />
                   {fornecedores.map((f, i) => (
                     <Bar key={f} dataKey={f} fill={COLORS[i % COLORS.length]} radius={[4, 4, 0, 0]} />
                   ))}

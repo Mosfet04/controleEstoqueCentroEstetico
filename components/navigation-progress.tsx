@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, createContext, useContext } from 'react'
+import { useEffect, useState, useRef, createContext, useContext } from 'react'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
@@ -39,9 +39,11 @@ export function NavigationProgress() {
   const [progress, setProgress] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
   const pathname = usePathname()
+  const fallbackRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     // Complete the progress bar when pathname changes
+    if (fallbackRef.current) clearTimeout(fallbackRef.current)
     setProgress(100)
     const timeout = setTimeout(() => {
       setIsAnimating(false)
@@ -51,23 +53,35 @@ export function NavigationProgress() {
   }, [pathname])
 
   useEffect(() => {
-    // Capture button/link clicks for navigation
+    let interval: NodeJS.Timeout | null = null
+    let fallbackTimeout: NodeJS.Timeout | null = null
+    let completeTimeout: NodeJS.Timeout | null = null
+
+    const completeAndReset = () => {
+      setProgress(100)
+      completeTimeout = setTimeout(() => {
+        setIsAnimating(false)
+        setProgress(0)
+      }, 300)
+    }
+
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement
       const button = target.closest('button')
       const link = target.closest('a')
-      
+
       if (button || (link && link.href?.startsWith(window.location.origin))) {
         const href = link?.getAttribute('href')
         if (!href || (href !== pathname && !href.startsWith('#'))) {
           setIsAnimating(true)
           setProgress(30)
+          if (fallbackTimeout) clearTimeout(fallbackTimeout)
+          fallbackTimeout = setTimeout(completeAndReset, 4000)
+          fallbackRef.current = fallbackTimeout
         }
       }
     }
 
-    // Progress animation
-    let interval: NodeJS.Timeout
     if (isAnimating && progress < 90) {
       interval = setInterval(() => {
         setProgress((prev) => {
@@ -79,10 +93,12 @@ export function NavigationProgress() {
     }
 
     document.addEventListener('click', handleClick)
-    
+
     return () => {
       document.removeEventListener('click', handleClick)
       if (interval) clearInterval(interval)
+      if (fallbackTimeout) clearTimeout(fallbackTimeout)
+      if (completeTimeout) clearTimeout(completeTimeout)
     }
   }, [isAnimating, pathname, progress])
 

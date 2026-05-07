@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import { toSP, nowSP } from '@/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination'
 import { useUnidade } from '@/contexts/unidade-context'
 import { useAuth } from '@/contexts/auth-context'
 import { COR_CHART_MAP } from '@/lib/types'
@@ -57,6 +58,67 @@ const TIPO_SAIDA_COLORS: Record<string, string> = {
 }
 
 const PREVISAO_PAGE_SIZE = 10
+const ESTOQUE_BAIXO_PAGE_SIZE = 5
+const VENCIMENTOS_PAGE_SIZE = 5
+
+function PaginationNav({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number
+  totalPages: number
+  onChange: (p: number) => void
+}) {
+  if (totalPages <= 1) return null
+
+  const pages: (number | 'ellipsis')[] = []
+  if (totalPages <= 5) {
+    for (let i = 0; i < totalPages; i++) pages.push(i)
+  } else {
+    pages.push(0)
+    if (page > 2) pages.push('ellipsis')
+    for (let i = Math.max(1, page - 1); i <= Math.min(totalPages - 2, page + 1); i++) {
+      pages.push(i)
+    }
+    if (page < totalPages - 3) pages.push('ellipsis')
+    pages.push(totalPages - 1)
+  }
+
+  return (
+    <Pagination className="mt-4">
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious
+            onClick={(e) => { e.preventDefault(); if (page > 0) onChange(page - 1) }}
+            className={page === 0 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+          />
+        </PaginationItem>
+        {pages.map((p, idx) =>
+          p === 'ellipsis' ? (
+            <PaginationItem key={`e-${idx}`}><PaginationEllipsis /></PaginationItem>
+          ) : (
+            <PaginationItem key={p}>
+              <PaginationLink
+                isActive={p === page}
+                onClick={(e) => { e.preventDefault(); onChange(p) }}
+                className="cursor-pointer"
+              >
+                {p + 1}
+              </PaginationLink>
+            </PaginationItem>
+          )
+        )}
+        <PaginationItem>
+          <PaginationNext
+            onClick={(e) => { e.preventDefault(); if (page < totalPages - 1) onChange(page + 1) }}
+            className={page >= totalPages - 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+          />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  )
+}
 
 function SectionHeading({
   title,
@@ -115,6 +177,10 @@ export default function RelatoriosPage() {
   const [previsaoPage, setPrevisaoPage] = useState(0)
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>(null)
+
+  // Paginação para Estoque Baixo e Previsão de Vencimentos
+  const [estoqueBaixoPage, setEstoqueBaixoPage] = useState(0)
+  const [vencimentosPage, setVencimentosPage] = useState(0)
 
   const now = nowSP()
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(now), 'yyyy-MM-dd'))
@@ -203,6 +269,42 @@ export default function RelatoriosPage() {
     previsaoPage * PREVISAO_PAGE_SIZE,
     (previsaoPage + 1) * PREVISAO_PAGE_SIZE,
   )
+
+  // Estoque Baixo: crítico antes de atenção, depois pelo ratio quantidade/quantidadeMinima ascendente
+  const criticosSorted = useMemo(() => {
+    if (!data?.criticos) return []
+    return [...data.criticos].sort((a, b) => {
+      if (a.status !== b.status) return a.status === 'critico' ? -1 : 1
+      const ratioA = a.quantidadeMinima > 0 ? a.quantidade / a.quantidadeMinima : 0
+      const ratioB = b.quantidadeMinima > 0 ? b.quantidade / b.quantidadeMinima : 0
+      return ratioA - ratioB
+    })
+  }, [data?.criticos])
+
+  // Previsão de Vencimentos: dias restantes ascendente (mais urgente primeiro)
+  const vencimentosSorted = useMemo(() => {
+    if (!data?.vencendo60) return []
+    const now = nowSP()
+    return [...data.vencendo60].sort((a, b) => {
+      const diasA = differenceInDays(toSP(a.dataVencimento), now)
+      const diasB = differenceInDays(toSP(b.dataVencimento), now)
+      return diasA - diasB
+    })
+  }, [data?.vencendo60])
+
+  useEffect(() => { setEstoqueBaixoPage(0) }, [criticosSorted])
+  useEffect(() => { setVencimentosPage(0) }, [vencimentosSorted])
+
+  const criticosPaginados = criticosSorted.slice(
+    estoqueBaixoPage * ESTOQUE_BAIXO_PAGE_SIZE,
+    (estoqueBaixoPage + 1) * ESTOQUE_BAIXO_PAGE_SIZE
+  )
+  const vencimentosPaginados = vencimentosSorted.slice(
+    vencimentosPage * VENCIMENTOS_PAGE_SIZE,
+    (vencimentosPage + 1) * VENCIMENTOS_PAGE_SIZE
+  )
+  const estoqueBaixoTotalPages = Math.max(1, Math.ceil(criticosSorted.length / ESTOQUE_BAIXO_PAGE_SIZE))
+  const vencimentosTotalPages = Math.max(1, Math.ceil(vencimentosSorted.length / VENCIMENTOS_PAGE_SIZE))
 
   // Ícone de ordenação para cada coluna
   const sortIcon = (field: SortField) => {
@@ -500,24 +602,31 @@ export default function RelatoriosPage() {
                 <CardDescription>Insumos que precisam de reposição</CardDescription>
               </CardHeader>
               <CardContent>
-                {criticos.length === 0 ? (
+                {criticosSorted.length === 0 ? (
                   <p className="text-muted-foreground text-sm text-center py-4">Todos os insumos com estoque adequado.</p>
                 ) : (
-                  <div className="space-y-3">
-                    {criticos.map((insumo) => (
-                      <div key={insumo.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
-                        <p className="font-medium text-sm">{insumo.nome}</p>
-                        <div className="text-right">
-                          <Badge variant={insumo.status === 'critico' ? 'destructive' : 'secondary'}>
-                            {insumo.quantidade} / {insumo.quantidadeMinima}
-                          </Badge>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {insumo.status === 'critico' ? 'Crítico' : 'Atenção'}
-                          </p>
+                  <>
+                    <div className="space-y-3">
+                      {criticosPaginados.map((insumo) => (
+                        <div key={insumo.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+                          <p className="font-medium text-sm">{insumo.nome}</p>
+                          <div className="text-right">
+                            <Badge variant={insumo.status === 'critico' ? 'destructive' : 'secondary'}>
+                              {insumo.quantidade} / {insumo.quantidadeMinima}
+                            </Badge>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {insumo.status === 'critico' ? 'Crítico' : 'Atenção'}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                    <PaginationNav
+                      page={estoqueBaixoPage}
+                      totalPages={estoqueBaixoTotalPages}
+                      onChange={setEstoqueBaixoPage}
+                    />
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -531,27 +640,34 @@ export default function RelatoriosPage() {
                 <CardDescription>Insumos vencendo nos próximos 60 dias</CardDescription>
               </CardHeader>
               <CardContent>
-                {vencendo.length === 0 ? (
+                {vencimentosSorted.length === 0 ? (
                   <p className="text-muted-foreground text-sm text-center py-4">Nenhum insumo vencendo em breve.</p>
                 ) : (
-                  <div className="space-y-3">
-                    {vencendo.map((insumo) => {
-                      const dias = differenceInDays(toSP(insumo.dataVencimento), nowSP())
-                      return (
-                        <div key={insumo.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
-                          <p className="font-medium text-sm">{insumo.nome}</p>
-                          <div className="text-right">
-                            <Badge variant={dias <= 15 ? 'destructive' : 'secondary'}>
-                              {dias} {dias === 1 ? 'dia' : 'dias'}
-                            </Badge>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {format(toSP(insumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}
-                            </p>
+                  <>
+                    <div className="space-y-3">
+                      {vencimentosPaginados.map((insumo) => {
+                        const dias = differenceInDays(toSP(insumo.dataVencimento), nowSP())
+                        return (
+                          <div key={insumo.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+                            <p className="font-medium text-sm">{insumo.nome}</p>
+                            <div className="text-right">
+                              <Badge variant={dias <= 15 ? 'destructive' : 'secondary'}>
+                                {dias} {dias === 1 ? 'dia' : 'dias'}
+                              </Badge>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {format(toSP(insumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                        )
+                      })}
+                    </div>
+                    <PaginationNav
+                      page={vencimentosPage}
+                      totalPages={vencimentosTotalPages}
+                      onChange={setVencimentosPage}
+                    />
+                  </>
                 )}
               </CardContent>
             </Card>

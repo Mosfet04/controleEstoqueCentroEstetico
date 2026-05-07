@@ -17,3 +17,13 @@ export function nowSP(): TZDate {
 export function toSP(date: Date | string | number): TZDate {
   return new TZDate(typeof date === 'string' || typeof date === 'number' ? new Date(date) : date, SP_TIMEZONE)
 }
+
+/** Normalizes a name string for deduplication: removes accents, lowercases, trims, collapses spaces. */
+export function normalizeName(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+}

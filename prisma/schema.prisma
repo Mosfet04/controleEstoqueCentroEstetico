@@ -11,10 +11,27 @@ enum UserRole {
   clinico
 }
 
-enum TipoSaida {
+enum CategoriaSaida {
   uso
   descarte
   ajuste
+}
+
+model TipoSaida {
+  id        String         @id @default(cuid())
+  nome      String
+  slug      String         @unique
+  categoria CategoriaSaida
+  cor       String         @default("blue")
+  ativo     Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  saidas    SaidaInsumo[]
+
+  @@index([slug])
+  @@index([categoria])
+  @@map("tipo_saida")
 }
 
 model TipoInsumo {
@@ -100,7 +117,8 @@ model SaidaInsumo {
   unidadeId    String
   unidade      Unidade   @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
   quantidade   Int
-  tipo         TipoSaida @default(uso)
+  tipoSaidaId  String
+  tipoSaida    TipoSaida @relation(fields: [tipoSaidaId], references: [id], onDelete: Restrict)
   motivo       String?
   observacao   String?
   dataRetirada DateTime  @default(now())
@@ -109,7 +127,7 @@ model SaidaInsumo {
   @@index([insumoId])
   @@index([userId])
   @@index([dataRetirada])
-  @@index([tipo])
+  @@index([tipoSaidaId])
   @@index([unidadeId])
 }
 
