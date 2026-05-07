@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
+import { TZDate } from '@date-fns/tz'
+import { startOfMonth, endOfMonth } from 'date-fns'
 import { prisma } from '@/lib/prisma'
 import { getDashboardData } from '@/lib/dashboard-data'
 import { generateReport } from '@/lib/report-generator'
 import { sendReportEmail } from '@/lib/email'
-import { nowSP } from '@/lib/utils'
+import { SP_TIMEZONE } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -22,16 +24,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: 'Nenhum admin encontrado' })
     }
 
-    // Cron runs on day 1 — report covers the previous (just-completed) month
-    const now = nowSP()
-    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const month = String(prevMonth.getMonth() + 1).padStart(2, '0')
-    const year = prevMonth.getFullYear()
+    // O cron é agendado em UTC (`0 1 1 * *` = 01:00 UTC). Em SP isso é 22:00 do dia 31
+    // do mês anterior — `nowSP()` ainda retorna o mês "atual" da perspectiva SP, e
+    // `getMonth() - 1` voltaria DOIS meses. Buffer de 5 dias para trás garante que
+    // pousamos com folga no mês recém-encerrado, em qualquer fuso/horário de execução.
+    const reference = new TZDate(Date.now() - 5 * 24 * 60 * 60 * 1000, SP_TIMEZONE)
+    const periodStart = startOfMonth(reference)
+    const periodEnd = endOfMonth(reference)
+    const month = String(reference.getMonth() + 1).padStart(2, '0')
+    const year = reference.getFullYear()
 
     const unidades = await prisma.unidade.findMany({ where: { ativa: true } })
 
     for (const unidade of unidades) {
-      const data = await getDashboardData(prevMonth, unidade.id)
+      const data = await getDashboardData(undefined, unidade.id, {
+        from: periodStart,
+        to: periodEnd,
+      })
       const buffer = await generateReport(data)
 
       await sendReportEmail({
