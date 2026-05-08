@@ -62,7 +62,7 @@ export type InsumoInput = z.infer<typeof insumoSchema>
 
 export const saidaSchema = z.object({
   insumoId: z.string().cuid({ message: 'ID de insumo inválido' }),
-  tipoSaidaId: z.string().cuid({ message: 'Selecione um tipo de saída válido' }),
+  tipoSaidaId: z.string().min(1, 'Selecione um tipo de saída válido'),
   quantidade: z.number().int().min(1, 'Quantidade deve ser pelo menos 1'),
   motivo: z.string().max(500).optional(),
   observacao: z.string().max(500).optional(),
