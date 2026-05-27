@@ -5,7 +5,10 @@
       "Bash(npm run *)",
       "Bash(npx eslint *)",
       "Bash(npx next *)",
-      "Bash(./node_modules/.bin/eslint app/dashboard/relatorios/page.tsx app/api/comparativo/route.ts lib/dashboard-data.ts lib/api.ts lib/pdf-generator.ts lib/report-generator.ts)"
+      "Bash(./node_modules/.bin/eslint app/dashboard/relatorios/page.tsx app/api/comparativo/route.ts lib/dashboard-data.ts lib/api.ts lib/pdf-generator.ts lib/report-generator.ts)",
+      "Bash(npx prisma *)",
+      "Bash(git stash *)",
+      "Bash(git checkout *)"
     ]
   }
 }

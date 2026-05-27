@@ -19,10 +19,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { TrendingDown, TrendingUp, DollarSign, Store, ChevronsUpDown, Check } from 'lucide-react'
 import { fornecedoresApi, FornecedorComparativo, ApiError } from '@/lib/api'
-import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
-import { toSP, cn, normalizeName } from '@/lib/utils'
+import { cn, normalizeName, inputDateRangeToISODateOnly, dateOnlyToDisplay } from '@/lib/utils'
 import {
   Bar,
   BarChart,
@@ -134,8 +132,8 @@ export default function FornecedoresPage() {
     setLoading(true)
     try {
       const result = await fornecedoresApi.compare({
-        from: new Date(filterFrom).toISOString(),
-        to: new Date(filterTo).toISOString(),
+        from: inputDateRangeToISODateOnly(filterFrom, 'start'),
+        to: inputDateRangeToISODateOnly(filterTo, 'end'),
       })
       setAllData(result)
       setData(result)
@@ -446,9 +444,7 @@ export default function FornecedoresPage() {
                           {item.precoMaximo != null ? `R$ ${item.precoMaximo.toFixed(2)}` : '—'}
                         </TableCell>
                         <TableCell>
-                          {item.ultimaEntrada
-                            ? format(toSP(item.ultimaEntrada), 'dd/MM/yyyy', { locale: ptBR })
-                            : '—'}
+                          {item.ultimaEntrada ? dateOnlyToDisplay(item.ultimaEntrada) : '—'}
                         </TableCell>
                       </TableRow>
                     )
