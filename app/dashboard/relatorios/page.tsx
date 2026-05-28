@@ -398,7 +398,7 @@ export default function RelatoriosPage() {
     total: f.total,
   }))
 
-  const periodoLabel = `${dateOnlyToDisplay(`${appliedFrom}T00:00:00.000Z`)} a ${dateOnlyToDisplay(`${appliedTo}T00:00:00.000Z`)}`
+  const periodoLabel = `${dateOnlyToDisplay(appliedFrom)} a ${dateOnlyToDisplay(appliedTo)}`
 
   return (
     <div className="space-y-6">

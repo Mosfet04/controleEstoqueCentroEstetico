@@ -165,7 +165,7 @@ export interface InsumoPayload {
   fornecedor: string
   quantidade: number
   quantidadeMinima: number
-  precoUnitario?: number
+  precoUnitario?: number | null
   dataEntrada: string
   dataVencimento: string
 }

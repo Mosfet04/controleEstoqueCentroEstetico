@@ -42,7 +42,7 @@ export const insumoSchema = z
     fornecedor: z.string().min(1, 'Fornecedor é obrigatório').max(200),
     quantidade: z.number().int().min(0, 'Quantidade não pode ser negativa'),
     quantidadeMinima: z.number().int().min(0, 'Quantidade mínima não pode ser negativa'),
-    precoUnitario: z.number().positive('Preço deve ser positivo').optional(),
+    precoUnitario: z.number().positive('Preço deve ser positivo').nullable().optional(),
     dataEntrada: z.string().datetime({ message: 'Data de entrada inválida' }),
     dataVencimento: z.string().datetime({ message: 'Data de vencimento inválida' }),
   })

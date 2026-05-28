@@ -190,7 +190,7 @@ export default function InsumosPage() {
       fornecedor: formData.fornecedor,
       quantidade: parseInt(formData.quantidade, 10) || 0,
       quantidadeMinima: parseInt(formData.quantidadeMinima, 10) || 0,
-      ...(formData.precoUnitario ? { precoUnitario: parseFloat(formData.precoUnitario) } : {}),
+      precoUnitario: formData.precoUnitario.trim() === '' ? null : parseFloat(formData.precoUnitario),
       dataEntrada: inputDateToISO(formData.dataEntrada),
       dataVencimento: inputDateToISO(formData.dataVencimento),
     }
