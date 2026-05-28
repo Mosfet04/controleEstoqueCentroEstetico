@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,10 +39,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
+import { Combobox } from '@/components/ui/combobox'
 import { Plus, Search, Pencil, Trash2 } from 'lucide-react'
 import { insumosApi, tiposInsumoApi, TipoInsumoApi, InsumoApi, ApiError } from '@/lib/api'
 import { COR_BADGE_MAP } from '@/lib/types'
 import { useUnidade } from '@/contexts/unidade-context'
+import { toast } from 'sonner'
+import { dateOnlyToInput, inputDateToISO, dateOnlyToDisplay } from '@/lib/utils'
 
 type StatusEstoque = 'bom' | 'atencao' | 'critico'
 
@@ -51,10 +54,6 @@ const STATUS_LABELS: Record<StatusEstoque, string> = {
   atencao: 'Atenção',
   critico: 'Crítico',
 }
-import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
-import { toast } from 'sonner'
-import { toSP, nowSP } from '@/lib/utils'
 
 function StatusBadge({ status }: { status: StatusEstoque }) {
   const variants: Record<StatusEstoque, { className: string }> = {
@@ -76,8 +75,8 @@ interface InsumoFormData {
   lote: string
   tipoId: string
   fornecedor: string
-  quantidade: number
-  quantidadeMinima: number
+  quantidade: string
+  quantidadeMinima: string
   precoUnitario: string
   dataEntrada: string
   dataVencimento: string
@@ -89,8 +88,8 @@ const initialFormData: InsumoFormData = {
   lote: '',
   tipoId: '',
   fornecedor: '',
-  quantidade: 0,
-  quantidadeMinima: 0,
+  quantidade: '0',
+  quantidadeMinima: '0',
   precoUnitario: '',
   dataEntrada: '',
   dataVencimento: '',
@@ -108,7 +107,7 @@ export default function InsumosPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [formData, setFormData] = useState<InsumoFormData>({
     ...initialFormData,
-    dataEntrada: format(nowSP(), 'yyyy-MM-dd'),
+    dataEntrada: dateOnlyToInput(new Date()),
   })
 
   const loadInsumos = async () => {
@@ -136,6 +135,9 @@ export default function InsumosPage() {
     loadTipos()
   }, [])
 
+  const fetchNomeSuggestions = useCallback((q: string) => insumosApi.suggestions('nome', q), [])
+  const fetchFornecedorSuggestions = useCallback((q: string) => insumosApi.suggestions('fornecedor', q), [])
+
   const filteredInsumos = insumos.filter((insumo) => {
     const matchesSearch =
       insumo.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -155,17 +157,17 @@ export default function InsumosPage() {
         lote: insumo.lote,
         tipoId: insumo.tipoId,
         fornecedor: insumo.fornecedor,
-        quantidade: insumo.quantidade,
-        quantidadeMinima: insumo.quantidadeMinima,
+        quantidade: String(insumo.quantidade),
+        quantidadeMinima: String(insumo.quantidadeMinima),
         precoUnitario: insumo.precoUnitario != null ? String(insumo.precoUnitario) : '',
-        dataEntrada: format(toSP(insumo.dataEntrada), 'yyyy-MM-dd'),
-        dataVencimento: format(toSP(insumo.dataVencimento), 'yyyy-MM-dd'),
+        dataEntrada: dateOnlyToInput(insumo.dataEntrada),
+        dataVencimento: dateOnlyToInput(insumo.dataVencimento),
       })
     } else {
       setEditingInsumo(null)
       setFormData({
         ...initialFormData,
-        dataEntrada: format(nowSP(), 'yyyy-MM-dd'),
+        dataEntrada: dateOnlyToInput(new Date()),
         tipoId: tiposInsumo[0]?.id ?? '',
         unidadeId: unidadeAtiva?.id ?? unidades.filter((u) => u.ativa)[0]?.id ?? '',
       })
@@ -186,11 +188,11 @@ export default function InsumosPage() {
       lote: formData.lote,
       tipoId: formData.tipoId,
       fornecedor: formData.fornecedor,
-      quantidade: formData.quantidade,
-      quantidadeMinima: formData.quantidadeMinima,
+      quantidade: parseInt(formData.quantidade, 10) || 0,
+      quantidadeMinima: parseInt(formData.quantidadeMinima, 10) || 0,
       ...(formData.precoUnitario ? { precoUnitario: parseFloat(formData.precoUnitario) } : {}),
-      dataEntrada: new Date(formData.dataEntrada).toISOString(),
-      dataVencimento: new Date(formData.dataVencimento).toISOString(),
+      dataEntrada: inputDateToISO(formData.dataEntrada),
+      dataVencimento: inputDateToISO(formData.dataVencimento),
     }
 
     try {
@@ -275,9 +277,10 @@ export default function InsumosPage() {
                 </Field>
                 <Field>
                   <FieldLabel>Nome</FieldLabel>
-                  <Input
+                  <Combobox
                     value={formData.nome}
-                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                    onChange={(v) => setFormData({ ...formData, nome: v })}
+                    fetchSuggestions={fetchNomeSuggestions}
                     placeholder="Ex: Botox 100U"
                     required
                   />
@@ -306,9 +309,10 @@ export default function InsumosPage() {
                 </Field>
                 <Field>
                   <FieldLabel>Fornecedor</FieldLabel>
-                  <Input
+                  <Combobox
                     value={formData.fornecedor}
-                    onChange={(e) => setFormData({ ...formData, fornecedor: e.target.value })}
+                    onChange={(v) => setFormData({ ...formData, fornecedor: v })}
+                    fetchSuggestions={fetchFornecedorSuggestions}
                     placeholder="Ex: Allergan"
                     required
                   />
@@ -320,7 +324,7 @@ export default function InsumosPage() {
                       type="number"
                       min="0"
                       value={formData.quantidade}
-                      onChange={(e) => setFormData({ ...formData, quantidade: parseInt(e.target.value) || 0 })}
+                      onChange={(e) => setFormData({ ...formData, quantidade: e.target.value })}
                       required
                     />
                   </Field>
@@ -330,7 +334,7 @@ export default function InsumosPage() {
                       type="number"
                       min="0"
                       value={formData.quantidadeMinima}
-                      onChange={(e) => setFormData({ ...formData, quantidadeMinima: parseInt(e.target.value) || 0 })}
+                      onChange={(e) => setFormData({ ...formData, quantidadeMinima: e.target.value })}
                       required
                     />
                   </Field>
@@ -466,7 +470,7 @@ export default function InsumosPage() {
                           ? `R$ ${Number(insumo.precoUnitario).toFixed(2)}`
                           : <span className="text-muted-foreground">—</span>}
                       </TableCell>
-                      <TableCell>{format(toSP(insumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
+                      <TableCell>{dateOnlyToDisplay(insumo.dataVencimento)}</TableCell>
                       <TableCell><StatusBadge status={insumo.status} /></TableCell>
                       {!isGlobalView && (
                         <TableCell className="text-right">

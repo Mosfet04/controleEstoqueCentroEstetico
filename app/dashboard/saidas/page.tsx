@@ -37,12 +37,12 @@ import { useUnidade } from '@/contexts/unidade-context'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
-import { toSP } from '@/lib/utils'
+import { toSP, dateOnlyToDisplay } from '@/lib/utils'
 
 interface SaidaFormData {
   unidadeId: string
   insumoId: string
-  quantidade: number
+  quantidade: string
   tipoSaidaId: string
   motivo: string
   observacao: string
@@ -51,7 +51,7 @@ interface SaidaFormData {
 const initialFormData: SaidaFormData = {
   unidadeId: '',
   insumoId: '',
-  quantidade: 1,
+  quantidade: '1',
   tipoSaidaId: '',
   motivo: '',
   observacao: '',
@@ -153,7 +153,13 @@ export default function SaidasPage() {
       return
     }
 
-    if (selectedInsumo && formData.quantidade > selectedInsumo.quantidade) {
+    const quantidade = parseInt(formData.quantidade, 10) || 0
+    if (quantidade < 1) {
+      setError('Quantidade deve ser pelo menos 1')
+      return
+    }
+
+    if (selectedInsumo && quantidade > selectedInsumo.quantidade) {
       setError(`Quantidade indisponível. Estoque atual: ${selectedInsumo.quantidade}`)
       return
     }
@@ -162,7 +168,7 @@ export default function SaidasPage() {
     try {
       await saidasApi.create({
         insumoId: formData.insumoId,
-        quantidade: formData.quantidade,
+        quantidade,
         tipoSaidaId: formData.tipoSaidaId,
         motivo: formData.motivo.trim() || undefined,
         observacao: formData.observacao.trim() || undefined,
@@ -331,7 +337,7 @@ export default function SaidasPage() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Vencimento:</span>
                       <span className="font-medium">
-                        {format(toSP(selectedInsumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}
+                        {dateOnlyToDisplay(selectedInsumo.dataVencimento)}
                       </span>
                     </div>
                   </div>
@@ -345,9 +351,7 @@ export default function SaidasPage() {
                     min="1"
                     max={selectedInsumo?.quantidade || 1}
                     value={formData.quantidade}
-                    onChange={(e) =>
-                      setFormData({ ...formData, quantidade: parseInt(e.target.value) || 1 })
-                    }
+                    onChange={(e) => setFormData({ ...formData, quantidade: e.target.value })}
                     required
                   />
                 </Field>

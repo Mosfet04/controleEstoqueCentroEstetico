@@ -15,10 +15,8 @@ import {
 } from 'lucide-react'
 import { dashboardApi, DashboardApi } from '@/lib/api'
 import { COR_BADGE_MAP } from '@/lib/types'
-import { format, differenceInDays } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
-import { toSP, nowSP } from '@/lib/utils'
+import { dateOnlyToDisplay, dateOnlyDaysFromNow } from '@/lib/utils'
 import { useUnidade } from '@/contexts/unidade-context'
 
 type StatusEstoque = 'bom' | 'atencao' | 'critico'
@@ -244,7 +242,7 @@ export default function DashboardPage() {
             ) : (
               <div className="space-y-3">
                 {vencendo30.slice(0, 5).map((insumo) => {
-                  const diasRestantes = differenceInDays(toSP(insumo.dataVencimento), nowSP())
+                  const diasRestantes = dateOnlyDaysFromNow(insumo.dataVencimento)
                   return (
                     <div key={insumo.id} className="flex items-center justify-between p-3 rounded-lg bg-yellow-50 border border-yellow-200">
                       <div className="flex flex-col">
@@ -255,7 +253,7 @@ export default function DashboardPage() {
                           {diasRestantes} {diasRestantes === 1 ? 'dia' : 'dias'}
                         </span>
                         <p className="text-xs text-muted-foreground">
-                          {format(toSP(insumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}
+                          {dateOnlyToDisplay(insumo.dataVencimento)}
                         </p>
                       </div>
                     </div>

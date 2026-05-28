@@ -8,11 +8,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import { dashboardApi, DashboardApi, comparativoApi, ComparativoApi, previsaoApi, PrevisaoItem, ApiError } from '@/lib/api'
-import { format, differenceInDays, startOfMonth, endOfMonth } from 'date-fns'
+import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { AlertTriangle, Clock, TrendingUp, Package, Trash2, SlidersHorizontal, Users, Activity, XCircle, Download, Loader2, CalendarIcon, Building2, Gauge, FileSpreadsheet, FileText, ChevronDown, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
 import { toast } from 'sonner'
-import { toSP, nowSP } from '@/lib/utils'
+import { toSP, nowSP, dateOnlyToDisplay, dateOnlyDaysFromNow, inputDateRangeToISO } from '@/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination'
@@ -190,8 +190,8 @@ export default function RelatoriosPage() {
 
   const loadData = useCallback(() => {
     setData(null)
-    const fromIso = new Date(appliedFrom).toISOString()
-    const toIso = new Date(appliedTo + 'T23:59:59').toISOString()
+    const fromIso = inputDateRangeToISO(appliedFrom, 'start')
+    const toIso = inputDateRangeToISO(appliedTo, 'end')
     dashboardApi.get({ from: fromIso, to: toIso })
       .then(setData)
       .catch((err) => {
@@ -284,10 +284,9 @@ export default function RelatoriosPage() {
   // Previsão de Vencimentos: dias restantes ascendente (mais urgente primeiro)
   const vencimentosSorted = useMemo(() => {
     if (!data?.vencendo60) return []
-    const now = nowSP()
     return [...data.vencendo60].sort((a, b) => {
-      const diasA = differenceInDays(toSP(a.dataVencimento), now)
-      const diasB = differenceInDays(toSP(b.dataVencimento), now)
+      const diasA = dateOnlyDaysFromNow(a.dataVencimento)
+      const diasB = dateOnlyDaysFromNow(b.dataVencimento)
       return diasA - diasB
     })
   }, [data?.vencendo60])
@@ -340,8 +339,8 @@ export default function RelatoriosPage() {
       const savedId = localStorage.getItem('unidadeAtiva')
       if (savedId) headers['x-unidade-id'] = savedId
       const params = new URLSearchParams({
-        from: new Date(appliedFrom).toISOString(),
-        to: new Date(appliedTo + 'T23:59:59').toISOString(),
+        from: inputDateRangeToISO(appliedFrom, 'start'),
+        to: inputDateRangeToISO(appliedTo, 'end'),
       })
       const response = await fetch(`/api/relatorios/export?${params}`, { headers })
       if (!response.ok) throw new Error('Erro ao gerar relatório')
@@ -399,7 +398,7 @@ export default function RelatoriosPage() {
     total: f.total,
   }))
 
-  const periodoLabel = `${format(toSP(new Date(appliedFrom)), 'dd/MM/yyyy', { locale: ptBR })} a ${format(toSP(new Date(appliedTo)), 'dd/MM/yyyy', { locale: ptBR })}`
+  const periodoLabel = `${dateOnlyToDisplay(`${appliedFrom}T00:00:00.000Z`)} a ${dateOnlyToDisplay(`${appliedTo}T00:00:00.000Z`)}`
 
   return (
     <div className="space-y-6">
@@ -646,7 +645,7 @@ export default function RelatoriosPage() {
                   <>
                     <div className="space-y-3">
                       {vencimentosPaginados.map((insumo) => {
-                        const dias = differenceInDays(toSP(insumo.dataVencimento), nowSP())
+                        const dias = dateOnlyDaysFromNow(insumo.dataVencimento)
                         return (
                           <div key={insumo.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                             <p className="font-medium text-sm">{insumo.nome}</p>
@@ -655,7 +654,7 @@ export default function RelatoriosPage() {
                                 {dias} {dias === 1 ? 'dia' : 'dias'}
                               </Badge>
                               <p className="text-xs text-muted-foreground mt-1">
-                                {format(toSP(insumo.dataVencimento), 'dd/MM/yyyy', { locale: ptBR })}
+                                {dateOnlyToDisplay(insumo.dataVencimento)}
                               </p>
                             </div>
                           </div>

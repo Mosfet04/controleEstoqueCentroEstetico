@@ -25,7 +25,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
-import { toSP, nowSP } from '@/lib/utils'
+import { toSP, nowSP, inputDateRangeToISO } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
@@ -81,8 +81,8 @@ export default function AuditoriaPage() {
       const data = await auditoriaApi.list({
         entity: entityFilter !== 'all' ? entityFilter : undefined,
         action: actionFilter !== 'all' ? actionFilter : undefined,
-        from: new Date(appliedFrom).toISOString(),
-        to: new Date(appliedTo + 'T23:59:59').toISOString(),
+        from: inputDateRangeToISO(appliedFrom, 'start'),
+        to: inputDateRangeToISO(appliedTo, 'end'),
         limit: 200,
       })
       setLogs(data)

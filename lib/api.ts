@@ -192,6 +192,11 @@ export const insumosApi = {
     apiFetch<InsumoApi>(`/api/insumos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiFetch<{ success: boolean }>(`/api/insumos/${id}`, { method: 'DELETE' }),
+  suggestions: (field: 'nome' | 'fornecedor', q: string) => {
+    const search = new URLSearchParams({ field })
+    if (q) search.set('q', q)
+    return apiFetch<string[]>(`/api/insumos/suggestions?${search.toString()}`)
+  },
 }
 
 // ---------------------------------------------------------------------------
