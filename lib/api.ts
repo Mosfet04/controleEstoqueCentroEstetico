@@ -281,15 +281,23 @@ export const pedidosApi = {
       body: JSON.stringify(data),
       ...(unidadeOverride ? { headers: { 'x-unidade-id': unidadeOverride } } : {}),
     }),
-  update: (id: string, data: Partial<PedidoPayload> & { status?: 'cancelado' }) =>
-    apiFetch<PedidoApi>(`/api/pedidos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  delete: (id: string) =>
-    apiFetch<{ success: boolean }>(`/api/pedidos/${id}`, { method: 'DELETE' }),
+  update: (id: string, data: Partial<PedidoPayload> & { status?: 'cancelado' }, unidadeOverride?: string) =>
+    apiFetch<PedidoApi>(`/api/pedidos/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+      ...(unidadeOverride ? { headers: { 'x-unidade-id': unidadeOverride } } : {}),
+    }),
+  delete: (id: string, unidadeOverride?: string) =>
+    apiFetch<{ success: boolean }>(`/api/pedidos/${id}`, {
+      method: 'DELETE',
+      ...(unidadeOverride ? { headers: { 'x-unidade-id': unidadeOverride } } : {}),
+    }),
   // Recebe o pedido: cria a entrada no estoque (insumo) e marca o pedido como recebido.
-  receber: (id: string, data: InsumoPayload) =>
+  receber: (id: string, data: InsumoPayload, unidadeOverride?: string) =>
     apiFetch<PedidoApi>(`/api/pedidos/${id}/receber`, {
       method: 'POST',
       body: JSON.stringify(data),
+      ...(unidadeOverride ? { headers: { 'x-unidade-id': unidadeOverride } } : {}),
     }),
 }
 

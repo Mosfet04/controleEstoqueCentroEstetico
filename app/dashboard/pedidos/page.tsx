@@ -96,8 +96,8 @@ export default function PedidosPage() {
   const [form, setForm] = useState<PedidoFormState>(emptyPedidoForm)
   const [formSubmitting, setFormSubmitting] = useState(false)
   const [receber, setReceber] = useState<PedidoApi | null>(null)
-  const [cancelId, setCancelId] = useState<string | null>(null)
-  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<PedidoApi | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<PedidoApi | null>(null)
 
   const loadPedidos = async () => {
     try {
@@ -173,7 +173,7 @@ export default function PedidosPage() {
     setFormSubmitting(true)
     try {
       if (form.editingId) {
-        await pedidosApi.update(form.editingId, payload)
+        await pedidosApi.update(form.editingId, payload, form.unidadeId)
         toast.success('Pedido atualizado com sucesso!')
       } else {
         await pedidosApi.create(payload, form.unidadeId)
@@ -204,7 +204,7 @@ export default function PedidosPage() {
   const handleReceber = async (payload: InsumoPayload) => {
     if (!receber) return
     try {
-      await pedidosApi.receber(receber.id, payload)
+      await pedidosApi.receber(receber.id, payload, receber.unidadeId)
       toast.success('Pedido recebido e entrada registrada no estoque!')
       await loadPedidos()
     } catch (err) {
@@ -215,11 +215,11 @@ export default function PedidosPage() {
   }
 
   const handleCancel = async () => {
-    if (!cancelId) return
+    if (!cancelTarget) return
     try {
-      await pedidosApi.update(cancelId, { status: 'cancelado' })
+      await pedidosApi.update(cancelTarget.id, { status: 'cancelado' }, cancelTarget.unidadeId)
       toast.success('Pedido cancelado')
-      setCancelId(null)
+      setCancelTarget(null)
       await loadPedidos()
     } catch (err) {
       if (err instanceof ApiError) toast.error(err.message)
@@ -228,11 +228,11 @@ export default function PedidosPage() {
   }
 
   const handleDelete = async () => {
-    if (!deleteId) return
+    if (!deleteTarget) return
     try {
-      await pedidosApi.delete(deleteId)
+      await pedidosApi.delete(deleteTarget.id, deleteTarget.unidadeId)
       toast.success('Pedido excluído')
-      setDeleteId(null)
+      setDeleteTarget(null)
       await loadPedidos()
     } catch (err) {
       if (err instanceof ApiError) toast.error(err.message)
@@ -408,13 +408,13 @@ export default function PedidosPage() {
                   <TableHead>Status</TableHead>
                   <TableHead>Data do Pedido</TableHead>
                   <TableHead>Previsão</TableHead>
-                  {!isGlobalView && <TableHead className="text-right">Ações</TableHead>}
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredPedidos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isGlobalView ? 7 : 7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={isGlobalView ? 8 : 7} className="text-center py-8 text-muted-foreground">
                       Nenhum pedido encontrado
                     </TableCell>
                   </TableRow>
@@ -434,28 +434,26 @@ export default function PedidosPage() {
                           ? dateOnlyToDisplay(p.dataPrevista)
                           : <span className="text-muted-foreground">—</span>}
                       </TableCell>
-                      {!isGlobalView && (
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            {p.status === 'pendente' && (
-                              <>
-                                <Button variant="ghost" size="icon" title="Receber (dar entrada)" onClick={() => setReceber(p)}>
-                                  <PackageCheck className="w-4 h-4 text-green-600" />
-                                </Button>
-                                <Button variant="ghost" size="icon" title="Editar" onClick={() => openEdit(p)}>
-                                  <Pencil className="w-4 h-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" title="Cancelar pedido" onClick={() => setCancelId(p.id)}>
-                                  <Ban className="w-4 h-4 text-amber-600" />
-                                </Button>
-                              </>
-                            )}
-                            <Button variant="ghost" size="icon" title="Excluir" onClick={() => setDeleteId(p.id)}>
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          {p.status === 'pendente' && (
+                            <>
+                              <Button variant="ghost" size="icon" title="Receber (dar entrada)" onClick={() => setReceber(p)}>
+                                <PackageCheck className="w-4 h-4 text-green-600" />
+                              </Button>
+                              <Button variant="ghost" size="icon" title="Editar" onClick={() => openEdit(p)}>
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" title="Cancelar pedido" onClick={() => setCancelTarget(p)}>
+                                <Ban className="w-4 h-4 text-amber-600" />
+                              </Button>
+                            </>
+                          )}
+                          <Button variant="ghost" size="icon" title="Excluir" onClick={() => setDeleteTarget(p)}>
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -466,7 +464,7 @@ export default function PedidosPage() {
       </Card>
 
       {/* Confirmação de cancelamento */}
-      <AlertDialog open={!!cancelId} onOpenChange={() => setCancelId(null)}>
+      <AlertDialog open={!!cancelTarget} onOpenChange={() => setCancelTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Cancelar pedido</AlertDialogTitle>
@@ -484,7 +482,7 @@ export default function PedidosPage() {
       </AlertDialog>
 
       {/* Confirmação de exclusão */}
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir pedido</AlertDialogTitle>
