@@ -317,7 +317,7 @@ O banco utiliza **PostgreSQL** com **Prisma ORM**. O schema define os modelos e 
 
 | Método | Rota | Auth | Descrição |
 | --- | --- | --- | --- |
-| GET | `/api/insumos` | Autenticado | Lista insumos com filtros (`q`, `tipo`) |
+| GET | `/api/insumos` | Autenticado | Lista insumos com filtros (`q`, `tipo`, `tipoId`). Com `page` retorna paginado (`page`, `limit`, `status`) no formato `{ data, total, page, limit, totalPages }`; sem `page` retorna array |
 | POST | `/api/insumos` | Autenticado | Cria novo insumo |
 | GET | `/api/insumos/[id]` | Autenticado | Detalhe do insumo |
 | PUT | `/api/insumos/[id]` | Autenticado | Atualiza insumo |

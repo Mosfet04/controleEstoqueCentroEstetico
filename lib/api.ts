@@ -170,6 +170,14 @@ export interface InsumoPayload {
   dataVencimento: string
 }
 
+export interface PaginatedInsumos {
+  data: InsumoApi[]
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+}
+
 export const insumosApi = {
   list: (params?: { q?: string; tipo?: string; unidadeOverride?: string }) => {
     const search = new URLSearchParams()
@@ -181,6 +189,25 @@ export const insumosApi = {
       params?.unidadeOverride ? { headers: { 'x-unidade-id': params.unidadeOverride } } : undefined
     )
   },
+  listPaged: (params: {
+    page: number
+    limit?: number
+    q?: string
+    tipoId?: string
+    status?: 'bom' | 'atencao' | 'critico'
+    unidadeOverride?: string
+  }) => {
+    const search = new URLSearchParams()
+    search.set('page', String(params.page))
+    if (params.limit) search.set('limit', String(params.limit))
+    if (params.q) search.set('q', params.q)
+    if (params.tipoId) search.set('tipoId', params.tipoId)
+    if (params.status) search.set('status', params.status)
+    return apiFetch<PaginatedInsumos>(
+      `/api/insumos?${search.toString()}`,
+      params.unidadeOverride ? { headers: { 'x-unidade-id': params.unidadeOverride } } : undefined
+    )
+  },
   get: (id: string) => apiFetch<InsumoApi>(`/api/insumos/${id}`),
   create: (data: InsumoPayload, unidadeOverride?: string) =>
     apiFetch<InsumoApi>('/api/insumos', {
@@ -188,10 +215,17 @@ export const insumosApi = {
       body: JSON.stringify(data),
       ...(unidadeOverride ? { headers: { 'x-unidade-id': unidadeOverride } } : {}),
     }),
-  update: (id: string, data: InsumoPayload) =>
-    apiFetch<InsumoApi>(`/api/insumos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  delete: (id: string) =>
-    apiFetch<{ success: boolean }>(`/api/insumos/${id}`, { method: 'DELETE' }),
+  update: (id: string, data: InsumoPayload, unidadeOverride?: string) =>
+    apiFetch<InsumoApi>(`/api/insumos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      ...(unidadeOverride ? { headers: { 'x-unidade-id': unidadeOverride } } : {}),
+    }),
+  delete: (id: string, unidadeOverride?: string) =>
+    apiFetch<{ success: boolean }>(`/api/insumos/${id}`, {
+      method: 'DELETE',
+      ...(unidadeOverride ? { headers: { 'x-unidade-id': unidadeOverride } } : {}),
+    }),
   suggestions: (field: 'nome' | 'fornecedor', q: string) => {
     const search = new URLSearchParams({ field })
     if (q) search.set('q', q)

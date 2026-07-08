@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,6 +39,8 @@ import { toast } from 'sonner'
 import { dateOnlyToInput, dateOnlyToDisplay } from '@/lib/utils'
 
 type StatusEstoque = 'bom' | 'atencao' | 'critico'
+
+const PAGE_SIZE = 20
 
 const STATUS_LABELS: Record<StatusEstoque, string> = {
   bom: 'Bom',
@@ -92,8 +94,12 @@ export default function InsumosPage() {
   const [insumos, setInsumos] = useState<InsumoApi[]>([])
   const [tiposInsumo, setTiposInsumo] = useState<TipoInsumoApi[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterTipo, setFilterTipo] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<StatusEstoque | 'all'>('all')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [dialog, setDialog] = useState<DialogState>({
     open: false,
@@ -102,16 +108,24 @@ export default function InsumosPage() {
     initial: emptyInsumoForm,
   })
 
-  const loadInsumos = async () => {
+  const loadInsumos = useCallback(async () => {
     try {
-      const data = await insumosApi.list()
-      setInsumos(data)
+      const res = await insumosApi.listPaged({
+        page,
+        limit: PAGE_SIZE,
+        q: debouncedSearch || undefined,
+        tipoId: filterTipo !== 'all' ? filterTipo : undefined,
+        status: filterStatus !== 'all' ? filterStatus : undefined,
+      })
+      setInsumos(res.data)
+      setTotal(res.total)
+      setTotalPages(res.totalPages)
     } catch (err) {
       if (err instanceof ApiError && err.status !== 401) {
         toast.error('Erro ao carregar insumos')
       }
     }
-  }
+  }, [page, debouncedSearch, filterTipo, filterStatus])
 
   const loadTipos = async () => {
     try {
@@ -123,19 +137,26 @@ export default function InsumosPage() {
   }
 
   useEffect(() => {
-    loadInsumos()
     loadTipos()
   }, [])
 
-  const filteredInsumos = insumos.filter((insumo) => {
-    const matchesSearch =
-      insumo.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      insumo.lote.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      insumo.fornecedor.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesTipo = filterTipo === 'all' || insumo.tipoId === filterTipo
-    const matchesStatus = filterStatus === 'all' || insumo.status === filterStatus
-    return matchesSearch && matchesTipo && matchesStatus
-  })
+  useEffect(() => {
+    loadInsumos()
+  }, [loadInsumos])
+
+  // Debounce da busca: volta para a página 1 e aplica o termo após a digitação parar.
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim())
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(handle)
+  }, [searchTerm])
+
+  // Garante que a página atual nunca ultrapasse o total (ex.: após excluir o último item).
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
 
   const openCreate = () => {
     setDialog({
@@ -196,7 +217,8 @@ export default function InsumosPage() {
   const handleSubmit = async (payload: InsumoPayload, unidadeId: string) => {
     try {
       if (dialog.mode === 'edit' && dialog.editingId) {
-        await insumosApi.update(dialog.editingId, payload)
+        // Envia a unidade do próprio insumo para funcionar mesmo na visão "todas as unidades".
+        await insumosApi.update(dialog.editingId, payload, unidadeId)
         toast.success('Insumo atualizado com sucesso!')
       } else {
         await insumosApi.create(payload, unidadeId)
@@ -213,7 +235,9 @@ export default function InsumosPage() {
   const handleDelete = async () => {
     if (!deleteId) return
     try {
-      await insumosApi.delete(deleteId)
+      // Unidade do próprio insumo, para funcionar também na visão "todas as unidades".
+      const alvo = insumos.find((i) => i.id === deleteId)
+      await insumosApi.delete(deleteId, alvo?.unidadeId)
       toast.success('Insumo removido com sucesso!')
       setDeleteId(null)
       await loadInsumos()
@@ -267,7 +291,7 @@ export default function InsumosPage() {
                 className="pl-10"
               />
             </div>
-            <Select value={filterTipo} onValueChange={(v) => setFilterTipo(v)}>
+            <Select value={filterTipo} onValueChange={(v) => { setFilterTipo(v); setPage(1) }}>
               <SelectTrigger className="w-full sm:w-40">
                 <SelectValue placeholder="Tipo" />
               </SelectTrigger>
@@ -278,7 +302,7 @@ export default function InsumosPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as StatusEstoque | 'all')}>
+            <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v as StatusEstoque | 'all'); setPage(1) }}>
               <SelectTrigger className="w-full sm:w-40">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -297,7 +321,7 @@ export default function InsumosPage() {
       <Card>
         <CardHeader>
           <CardTitle>Lista de Insumos</CardTitle>
-          <CardDescription>{filteredInsumos.length} insumo(s) encontrado(s)</CardDescription>
+          <CardDescription>{total} insumo(s) encontrado(s)</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -313,18 +337,18 @@ export default function InsumosPage() {
                   <TableHead className="text-right">Preço Unit.</TableHead>
                   <TableHead>Vencimento</TableHead>
                   <TableHead>Status</TableHead>
-                  {!isGlobalView && <TableHead className="text-right">Ações</TableHead>}
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredInsumos.length === 0 ? (
+                {insumos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isGlobalView ? 9 : 9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={isGlobalView ? 10 : 9} className="text-center py-8 text-muted-foreground">
                       Nenhum insumo encontrado
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredInsumos.map((insumo) => (
+                  insumos.map((insumo) => (
                     <TableRow key={insumo.id}>
                       {isGlobalView && (
                         <TableCell className="text-muted-foreground text-sm">{insumo.unidadeNome}</TableCell>
@@ -341,27 +365,51 @@ export default function InsumosPage() {
                       </TableCell>
                       <TableCell>{dateOnlyToDisplay(insumo.dataVencimento)}</TableCell>
                       <TableCell><StatusBadge status={insumo.status} /></TableCell>
-                      {!isGlobalView && (
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button variant="ghost" size="icon" title="Nova entrada (novo lote)" onClick={() => openDuplicate(insumo)}>
-                              <Copy className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" title="Editar" onClick={() => openEdit(insumo)}>
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" title="Excluir" onClick={() => setDeleteId(insumo.id)}>
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" title="Nova entrada (novo lote)" onClick={() => openDuplicate(insumo)}>
+                            <Copy className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="Editar" onClick={() => openEdit(insumo)}>
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="Excluir" onClick={() => setDeleteId(insumo.id)}>
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
               </TableBody>
             </Table>
           </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between gap-4 pt-4">
+              <p className="text-sm text-muted-foreground">
+                Página {page} de {totalPages}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Próxima
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
