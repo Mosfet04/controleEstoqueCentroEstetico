@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth, isUser, getUnidadeId, requireUnidadeAccess } from '@/lib/auth-helpers'
 import { insumoSchema } from '@/lib/validations'
 import { withAuditContext } from '@/lib/audit-context'
+import { createAuditLog } from '@/lib/audit'
 import { pedidoInclude, serializePedido } from '@/lib/pedido'
 import { nowSP } from '@/lib/utils'
 
@@ -55,9 +56,22 @@ export async function POST(request: NextRequest, { params }: Params) {
       }
 
       const updated = await prisma.$transaction(async (tx) => {
+        // Reivindica o pedido de forma atômica: apenas um recebimento concorrente
+        // vence a transição pendente → recebido, evitando entrada de estoque duplicada.
+        const claim = await tx.pedido.updateMany({
+          where: { id, status: 'pendente' },
+          data: { status: 'recebido', dataRecebimento: nowSP() },
+        })
+        if (claim.count === 0) {
+          throw new Error('PEDIDO_NOT_PENDING')
+        }
+
         await tx.insumo.create({
           data: {
             ...rest,
+            // Nome e fornecedor da entrada derivam do pedido, não do payload do cliente.
+            nome: pedido.produto,
+            fornecedor: pedido.fornecedor,
             tipoId,
             dataEntrada: new Date(dataEntrada),
             dataVencimento: new Date(dataVencimento),
@@ -65,11 +79,16 @@ export async function POST(request: NextRequest, { params }: Params) {
           },
         })
 
-        return tx.pedido.update({
-          where: { id },
-          data: { status: 'recebido', dataRecebimento: nowSP() },
-          include: pedidoInclude,
-        })
+        return tx.pedido.findUniqueOrThrow({ where: { id }, include: pedidoInclude })
+      })
+
+      // updateMany não é auto-auditado pela extensão do Prisma — registra manualmente.
+      await createAuditLog({
+        userId: user.id,
+        action: 'UPDATE',
+        entity: 'pedido',
+        entityId: id,
+        details: { status: 'recebido', produto: pedido.produto, fornecedor: pedido.fornecedor },
       })
 
       Sentry.addBreadcrumb({
@@ -80,6 +99,12 @@ export async function POST(request: NextRequest, { params }: Params) {
 
       return NextResponse.json(serializePedido(updated))
     } catch (error) {
+      if (error instanceof Error && error.message === 'PEDIDO_NOT_PENDING') {
+        return NextResponse.json(
+          { error: 'Apenas pedidos pendentes podem ser recebidos' },
+          { status: 409 }
+        )
+      }
       Sentry.captureException(error, { tags: { route: `POST /api/pedidos/${id}/receber` } })
       return NextResponse.json({ error: 'Erro ao receber pedido' }, { status: 500 })
     }

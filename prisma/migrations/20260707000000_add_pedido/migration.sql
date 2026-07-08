@@ -24,6 +24,9 @@ CREATE TABLE "Pedido" (
 CREATE INDEX "Pedido_unidadeId_idx" ON "Pedido"("unidadeId");
 
 -- CreateIndex
+CREATE INDEX "Pedido_userId_idx" ON "Pedido"("userId");
+
+-- CreateIndex
 CREATE INDEX "Pedido_status_idx" ON "Pedido"("status");
 
 -- CreateIndex

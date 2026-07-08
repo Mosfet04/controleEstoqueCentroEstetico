@@ -94,6 +94,7 @@ export default function PedidosPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<StatusPedido | 'all'>('all')
   const [form, setForm] = useState<PedidoFormState>(emptyPedidoForm)
+  const [formSubmitting, setFormSubmitting] = useState(false)
   const [receber, setReceber] = useState<PedidoApi | null>(null)
   const [cancelId, setCancelId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -164,10 +165,12 @@ export default function PedidosPage() {
       fornecedor: form.fornecedor,
       produto: form.produto,
       quantidade: parseInt(form.quantidade, 10) || 0,
-      observacao: form.observacao.trim() === '' ? undefined : form.observacao.trim(),
+      // null (não undefined) para que o PATCH consiga limpar a observação na edição.
+      observacao: form.observacao.trim() === '' ? null : form.observacao.trim(),
       dataPrevista: form.dataPrevista.trim() === '' ? null : inputDateToISO(form.dataPrevista),
     }
 
+    setFormSubmitting(true)
     try {
       if (form.editingId) {
         await pedidosApi.update(form.editingId, payload)
@@ -181,6 +184,8 @@ export default function PedidosPage() {
     } catch (err) {
       if (err instanceof ApiError) toast.error(err.message)
       else toast.error('Erro ao salvar pedido')
+    } finally {
+      setFormSubmitting(false)
     }
   }
 
@@ -333,7 +338,7 @@ export default function PedidosPage() {
                 <Button type="button" variant="outline" className="flex-1" onClick={() => setForm((f) => ({ ...f, open: false }))}>
                   Cancelar
                 </Button>
-                <Button type="submit" className="flex-1">
+                <Button type="submit" className="flex-1" disabled={formSubmitting}>
                   {form.editingId ? 'Salvar' : 'Registrar'}
                 </Button>
               </div>

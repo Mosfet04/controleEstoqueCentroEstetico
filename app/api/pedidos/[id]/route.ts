@@ -27,9 +27,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: 'Pedido não encontrado' }, { status: 404 })
       }
 
-      if (existing.status === 'recebido') {
+      if (existing.status !== 'pendente') {
         return NextResponse.json(
-          { error: 'Pedido já recebido não pode ser alterado' },
+          { error: 'Apenas pedidos pendentes podem ser alterados' },
           { status: 409 }
         )
       }

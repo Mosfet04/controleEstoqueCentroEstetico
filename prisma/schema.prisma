@@ -157,6 +157,7 @@ model Pedido {
   updatedAt       DateTime     @updatedAt
 
   @@index([unidadeId])
+  @@index([userId])
   @@index([status])
   @@index([fornecedor])
   @@index([dataPedido])

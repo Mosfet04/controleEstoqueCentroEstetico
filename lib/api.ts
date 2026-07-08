@@ -264,7 +264,7 @@ export interface PedidoPayload {
   fornecedor: string
   produto: string
   quantidade: number
-  observacao?: string
+  observacao?: string | null
   dataPrevista?: string | null
 }
 
@@ -281,7 +281,7 @@ export const pedidosApi = {
       body: JSON.stringify(data),
       ...(unidadeOverride ? { headers: { 'x-unidade-id': unidadeOverride } } : {}),
     }),
-  update: (id: string, data: Partial<PedidoPayload> & { status?: 'pendente' | 'cancelado' }) =>
+  update: (id: string, data: Partial<PedidoPayload> & { status?: 'cancelado' }) =>
     apiFetch<PedidoApi>(`/api/pedidos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiFetch<{ success: boolean }>(`/api/pedidos/${id}`, { method: 'DELETE' }),
