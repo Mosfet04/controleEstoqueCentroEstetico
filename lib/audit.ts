@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 
 export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'DEACTIVATE' | 'REACTIVATE'
-export type AuditEntity = 'insumo' | 'saida' | 'usuario' | 'unidade'
+export type AuditEntity = 'insumo' | 'saida' | 'usuario' | 'unidade' | 'pedido'
 
 export async function createAuditLog(params: {
   userId: string

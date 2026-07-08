@@ -241,6 +241,59 @@ export const saidasApi = {
 }
 
 // ---------------------------------------------------------------------------
+// Pedidos a Fornecedores
+// ---------------------------------------------------------------------------
+
+export interface PedidoApi {
+  id: string
+  fornecedor: string
+  produto: string
+  quantidade: number
+  status: 'pendente' | 'recebido' | 'cancelado'
+  observacao?: string | null
+  dataPedido: string
+  dataPrevista?: string | null
+  dataRecebimento?: string | null
+  responsavel: string
+  unidadeId: string
+  unidadeNome?: string
+  createdAt: string
+}
+
+export interface PedidoPayload {
+  fornecedor: string
+  produto: string
+  quantidade: number
+  observacao?: string
+  dataPrevista?: string | null
+}
+
+export const pedidosApi = {
+  list: (params?: { status?: string }) => {
+    const search = new URLSearchParams()
+    if (params?.status) search.set('status', params.status)
+    const qs = search.toString()
+    return apiFetch<PedidoApi[]>(`/api/pedidos${qs ? `?${qs}` : ''}`)
+  },
+  create: (data: PedidoPayload, unidadeOverride?: string) =>
+    apiFetch<PedidoApi>('/api/pedidos', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...(unidadeOverride ? { headers: { 'x-unidade-id': unidadeOverride } } : {}),
+    }),
+  update: (id: string, data: Partial<PedidoPayload> & { status?: 'pendente' | 'cancelado' }) =>
+    apiFetch<PedidoApi>(`/api/pedidos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    apiFetch<{ success: boolean }>(`/api/pedidos/${id}`, { method: 'DELETE' }),
+  // Recebe o pedido: cria a entrada no estoque (insumo) e marca o pedido como recebido.
+  receber: (id: string, data: InsumoPayload) =>
+    apiFetch<PedidoApi>(`/api/pedidos/${id}/receber`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+}
+
+// ---------------------------------------------------------------------------
 // Usuários
 // ---------------------------------------------------------------------------
 

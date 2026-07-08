@@ -39,6 +39,7 @@ Aplicação web completa para gestão de estoque de insumos em clínicas estéti
 - [Painel Principal (Dashboard)](#painel-principal-dashboard)
 - [Gerenciamento de Insumos](#gerenciamento-de-insumos)
 - [Registro de Saídas](#registro-de-saídas)
+- [Pedidos a Fornecedores](#pedidos-a-fornecedores)
 - [Comparativo de Fornecedores](#comparativo-de-fornecedores)
 - [Relatórios](#relatórios)
 - [Administração: Usuários](#administração-usuários)
@@ -192,6 +193,7 @@ Acesse [http://localhost:3000](http://localhost:3000) e faça login com as crede
 │   │   ├── auth/                # Autenticação (session, verify)
 │   │   ├── insumos/             # CRUD de insumos
 │   │   ├── saidas/              # Registro de saídas
+│   │   ├── pedidos/             # Pedidos a fornecedores (+ recebimento)
 │   │   ├── unidades/            # CRUD de unidades
 │   │   ├── usuarios/            # CRUD de usuários
 │   │   ├── dashboard/           # Métricas do dashboard
@@ -205,6 +207,7 @@ Acesse [http://localhost:3000](http://localhost:3000) e faça login com as crede
 │       ├── page.tsx             # Dashboard principal
 │       ├── insumos/             # Gestão de insumos
 │       ├── saidas/              # Registro de saídas
+│       ├── pedidos/             # Pedidos a fornecedores
 │       ├── fornecedores/        # Comparativo de preços por fornecedor
 │       ├── relatorios/          # Relatórios e gráficos
 │       ├── usuarios/            # Gestão de usuários (admin)
@@ -244,7 +247,7 @@ Acesse [http://localhost:3000](http://localhost:3000) e faça login com as crede
 
 ## Banco de Dados
 
-O banco utiliza **PostgreSQL** com **Prisma ORM**. O schema define 5 modelos e 3 enums:
+O banco utiliza **PostgreSQL** com **Prisma ORM**. O schema define os modelos e enums a seguir:
 
 ### Enums
 
@@ -253,6 +256,7 @@ O banco utiliza **PostgreSQL** com **Prisma ORM**. O schema define 5 modelos e 3
 | `UserRole` | `admin`, `clinico` | Papel do usuário no sistema |
 | `TipoInsumo` | `injetavel`, `descartavel`, `peeling` | Categoria do insumo |
 | `TipoSaida` | `uso`, `descarte`, `ajuste` | Tipo de movimentação de saída |
+| `StatusPedido` | `pendente`, `recebido`, `cancelado` | Status do pedido a fornecedor |
 
 ### Modelos
 
@@ -296,6 +300,7 @@ O banco utiliza **PostgreSQL** com **Prisma ORM**. O schema define 5 modelos e 3
 - **User** — Usuário do sistema com vínculo ao Firebase Auth via `firebaseUid`. Pode estar em múltiplas unidades.
 - **Insumo** — Item de estoque (produto). Contém lote, validade, quantidade, quantidade mínima e preço unitário (opcional, para comparação entre fornecedores).
 - **SaidaInsumo** — Registro de movimentação (uso clínico, descarte ou ajuste). Referencia o insumo, o usuário responsável e a unidade.
+- **Pedido** — Registro de pedido de compra feito a um fornecedor (produto, quantidade, status `pendente`/`recebido`/`cancelado`). Ao ser marcado como recebido, gera automaticamente uma entrada de estoque (novo `Insumo`/lote) em uma transação atômica. Vinculado a uma unidade e ao usuário responsável.
 - **AuditLog** — Trilha de auditoria automática. Registra ações (CREATE, UPDATE, DELETE, DEACTIVATE, REACTIVATE) com detalhes em JSON.
 
 ## Rotas da API
@@ -324,6 +329,16 @@ O banco utiliza **PostgreSQL** com **Prisma ORM**. O schema define 5 modelos e 3
 | --- | --- | --- | --- |
 | GET | `/api/saidas` | Autenticado | Lista saídas da unidade |
 | POST | `/api/saidas` | Autenticado | Registra saída (transação atômica: verifica estoque → decrementa → cria registro) |
+
+### Pedidos a Fornecedores
+
+| Método | Rota | Auth | Descrição |
+| --- | --- | --- | --- |
+| GET | `/api/pedidos` | Autenticado | Lista pedidos da unidade (filtro opcional `status`) |
+| POST | `/api/pedidos` | Autenticado | Cria pedido (status inicial `pendente`) |
+| PATCH | `/api/pedidos/[id]` | Autenticado | Edita ou cancela o pedido (não recebe) |
+| DELETE | `/api/pedidos/[id]` | Autenticado | Exclui o pedido |
+| POST | `/api/pedidos/[id]/receber` | Autenticado | Recebe o pedido: cria a entrada no estoque e marca como `recebido` (transação atômica) |
 
 ### Unidades
 
@@ -409,6 +424,7 @@ O sistema registra automaticamente todas as operações de escrita via `withAudi
 | --- | --- |
 | `insumo` | CREATE, UPDATE, DELETE |
 | `saida` | CREATE |
+| `pedido` | CREATE, UPDATE, DELETE |
 | `usuario` | CREATE, UPDATE, DELETE, DEACTIVATE, REACTIVATE |
 | `unidade` | CREATE, UPDATE, DELETE (desativação) |
 
@@ -563,6 +579,17 @@ Cada insumo recebe automaticamente um dos três status:
    - **Data de Vencimento** — Validade do produto (obrigatório)
 3. Clique em **Salvar**
 
+### Nova Entrada (novo lote)
+
+Quando chega **um novo lote de um produto que você já cadastrou**, não é preciso digitar tudo de novo:
+
+1. Na linha do produto, clique no ícone de **copiar** (Nova entrada)
+2. O formulário abre com **nome, tipo, fornecedor, quantidade mínima e preço já preenchidos**
+3. Informe apenas o **novo lote**, a **quantidade** recebida e a nova **validade**
+4. Clique em **Cadastrar**
+
+Cada lote fica como um registro separado, preservando o controle de validade individual de cada entrada.
+
 ### Editar e Excluir
 
 - Para editar, clique no ícone de edição na linha do insumo
@@ -598,6 +625,47 @@ O estoque do insumo será decrementado automaticamente. O sistema impede retirad
 ### Histórico
 
 A tabela de saídas mostra todas as movimentações com: insumo, tipo, quantidade, responsável e data. Use a busca e os filtros para encontrar registros específicos.
+
+## Pedidos a Fornecedores
+
+Acesse pelo menu lateral: **Pedidos**
+
+Esta tela serve para **registrar e acompanhar os pedidos de compra** feitos aos fornecedores — assim a equipe sabe o que já foi pedido e o que ainda está por chegar.
+
+### Registrar um Pedido
+
+1. Clique em **Novo Pedido**
+2. Preencha:
+   - **Unidade** (obrigatório)
+   - **Fornecedor** — com sugestões dos fornecedores já usados
+   - **Produto** — com sugestões dos produtos já cadastrados (também aceita itens novos)
+   - **Quantidade**
+   - **Previsão de Entrega** (opcional)
+   - **Observação** (opcional)
+3. Clique em **Registrar** — o pedido nasce com o status **Pendente**
+
+### Status do Pedido
+
+| Status | Significado |
+| --- | --- |
+| **Pendente** | Pedido feito, aguardando a chegada |
+| **Recebido** | Produto chegou e já deu entrada no estoque |
+| **Cancelado** | Pedido cancelado (não será recebido) |
+
+### Receber um Pedido (dar entrada no estoque)
+
+Quando o produto chega, clique no ícone de **recebimento** (✓) na linha do pedido:
+
+1. Abre um formulário com **fornecedor, produto e quantidade já preenchidos**
+2. Complete os dados da entrada: **lote**, **tipo**, **quantidade mínima**, **preço** e **validade**
+3. Clique em **Receber**
+
+O sistema **cria automaticamente o item no estoque** (novo lote) e marca o pedido como **Recebido** — tudo de uma só vez.
+
+### Editar, Cancelar e Excluir
+
+- Pedidos **pendentes** podem ser **editados** ou **cancelados**
+- Qualquer pedido pode ser **excluído** do histórico (excluir um pedido recebido não remove a entrada já feita no estoque)
 
 ## Comparativo de Fornecedores
 

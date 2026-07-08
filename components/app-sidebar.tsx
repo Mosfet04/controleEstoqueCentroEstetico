@@ -17,6 +17,7 @@ import {
   Globe,
   ClipboardList,
   Store,
+  ShoppingCart,
   Tags,
   ChevronRight,
 } from 'lucide-react'
@@ -29,6 +30,7 @@ import { useUnidade } from '@/contexts/unidade-context'
 
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard/pedidos', label: 'Pedidos', icon: ShoppingCart },
   { href: '/dashboard/fornecedores', label: 'Fornecedores', icon: Store },
 ]
 

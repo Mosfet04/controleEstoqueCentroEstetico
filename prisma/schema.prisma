@@ -17,6 +17,12 @@ enum CategoriaSaida {
   ajuste
 }
 
+enum StatusPedido {
+  pendente
+  recebido
+  cancelado
+}
+
 model TipoSaida {
   id        String         @id @default(cuid())
   nome      String
@@ -61,6 +67,7 @@ model Unidade {
   usuarios User[]
   insumos  Insumo[]
   saidas   SaidaInsumo[]
+  pedidos  Pedido[]
 }
 
 model User {
@@ -76,6 +83,7 @@ model User {
   unidades    Unidade[]
   saidas      SaidaInsumo[]
   auditLogs   AuditLog[]
+  pedidos     Pedido[]
 
   @@index([email])
   @@index([firebaseUid])
@@ -129,6 +137,29 @@ model SaidaInsumo {
   @@index([dataRetirada])
   @@index([tipoSaidaId])
   @@index([unidadeId])
+}
+
+model Pedido {
+  id              String       @id @default(cuid())
+  fornecedor      String
+  produto         String
+  quantidade      Int
+  status          StatusPedido @default(pendente)
+  observacao      String?
+  dataPedido      DateTime     @default(now())
+  dataPrevista    DateTime?
+  dataRecebimento DateTime?
+  unidadeId       String
+  unidade         Unidade      @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([unidadeId])
+  @@index([status])
+  @@index([fornecedor])
+  @@index([dataPedido])
 }
 
 model AuditLog {

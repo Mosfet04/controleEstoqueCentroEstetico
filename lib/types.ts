@@ -24,6 +24,21 @@ export const CATEGORIA_SAIDA_LABELS: Record<CategoriaSaida, string> = {
   ajuste: 'Ajuste de Estoque',
 }
 
+export type StatusPedido = 'pendente' | 'recebido' | 'cancelado'
+
+export const STATUS_PEDIDO_LABELS: Record<StatusPedido, string> = {
+  pendente: 'Pendente',
+  recebido: 'Recebido',
+  cancelado: 'Cancelado',
+}
+
+/** Classes Tailwind para o badge de status de pedido */
+export const STATUS_PEDIDO_BADGE: Record<StatusPedido, string> = {
+  pendente: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  recebido: 'bg-green-100 text-green-700 border-green-200',
+  cancelado: 'bg-gray-100 text-gray-500 border-gray-300',
+}
+
 export const MOTIVOS_DESCARTE = [
   'Produto vencido',
   'Avaria / Quebra',

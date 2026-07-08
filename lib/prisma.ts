@@ -10,6 +10,7 @@ const AUDITED_MODELS: Record<string, string> = {
   SaidaInsumo: 'saida',
   User: 'usuario',
   Unidade: 'unidade',
+  Pedido: 'pedido',
 }
 
 const SENSITIVE_KEYS = new Set(['password', 'firebaseUid'])

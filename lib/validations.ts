@@ -71,6 +71,28 @@ export const saidaSchema = z.object({
 export type SaidaInput = z.infer<typeof saidaSchema>
 
 // ---------------------------------------------------------------------------
+// Pedido a Fornecedor
+// ---------------------------------------------------------------------------
+
+export const pedidoSchema = z.object({
+  fornecedor: z.string().min(1, 'Fornecedor é obrigatório').max(200),
+  produto: z.string().min(1, 'Produto é obrigatório').max(200),
+  quantidade: z.number().int().min(1, 'Quantidade deve ser pelo menos 1'),
+  observacao: z.string().max(500).optional(),
+  dataPrevista: z.string().datetime({ message: 'Data prevista inválida' }).nullable().optional(),
+})
+
+export type PedidoInput = z.infer<typeof pedidoSchema>
+
+// Atualização/edição do pedido. "recebido" não é aceito aqui — o recebimento
+// ocorre pela rota dedicada /api/pedidos/[id]/receber, que dá entrada no estoque.
+export const pedidoUpdateSchema = pedidoSchema.partial().extend({
+  status: z.enum(['pendente', 'cancelado']).optional(),
+})
+
+export type PedidoUpdateInput = z.infer<typeof pedidoUpdateSchema>
+
+// ---------------------------------------------------------------------------
 // TipoSaida (dinâmico)
 // ---------------------------------------------------------------------------
 

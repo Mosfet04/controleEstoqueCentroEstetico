@@ -1,18 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -38,14 +30,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
-import { Combobox } from '@/components/ui/combobox'
-import { Plus, Search, Pencil, Trash2 } from 'lucide-react'
-import { insumosApi, tiposInsumoApi, TipoInsumoApi, InsumoApi, ApiError } from '@/lib/api'
+import { Plus, Search, Pencil, Trash2, Copy } from 'lucide-react'
+import { InsumoFormDialog, InsumoFormData, emptyInsumoForm } from '@/components/insumo-form-dialog'
+import { insumosApi, tiposInsumoApi, TipoInsumoApi, InsumoApi, InsumoPayload, ApiError } from '@/lib/api'
 import { COR_BADGE_MAP } from '@/lib/types'
 import { useUnidade } from '@/contexts/unidade-context'
 import { toast } from 'sonner'
-import { dateOnlyToInput, inputDateToISO, dateOnlyToDisplay } from '@/lib/utils'
+import { dateOnlyToInput, dateOnlyToDisplay } from '@/lib/utils'
 
 type StatusEstoque = 'bom' | 'atencao' | 'critico'
 
@@ -69,30 +60,31 @@ function TipoBadge({ nome, cor }: { nome: string; cor: string }) {
   return <Badge variant="outline" className={className}>{nome}</Badge>
 }
 
-interface InsumoFormData {
-  unidadeId: string
-  nome: string
-  lote: string
-  tipoId: string
-  fornecedor: string
-  quantidade: string
-  quantidadeMinima: string
-  precoUnitario: string
-  dataEntrada: string
-  dataVencimento: string
+type DialogMode = 'create' | 'edit' | 'entrada'
+
+interface DialogState {
+  open: boolean
+  mode: DialogMode
+  editingId: string | null
+  initial: InsumoFormData
 }
 
-const initialFormData: InsumoFormData = {
-  unidadeId: '',
-  nome: '',
-  lote: '',
-  tipoId: '',
-  fornecedor: '',
-  quantidade: '0',
-  quantidadeMinima: '0',
-  precoUnitario: '',
-  dataEntrada: '',
-  dataVencimento: '',
+const DIALOG_TEXTS: Record<DialogMode, { title: string; description: string; submitLabel: string }> = {
+  create: {
+    title: 'Novo Insumo',
+    description: 'Preencha os dados para cadastrar um novo insumo',
+    submitLabel: 'Cadastrar',
+  },
+  edit: {
+    title: 'Editar Insumo',
+    description: 'Atualize as informações do insumo',
+    submitLabel: 'Salvar',
+  },
+  entrada: {
+    title: 'Nova Entrada (novo lote)',
+    description: 'Os dados do produto já vêm preenchidos — informe apenas o novo lote, quantidade e validade',
+    submitLabel: 'Cadastrar',
+  },
 }
 
 export default function InsumosPage() {
@@ -102,12 +94,12 @@ export default function InsumosPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterTipo, setFilterTipo] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<StatusEstoque | 'all'>('all')
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingInsumo, setEditingInsumo] = useState<InsumoApi | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [formData, setFormData] = useState<InsumoFormData>({
-    ...initialFormData,
-    dataEntrada: dateOnlyToInput(new Date()),
+  const [dialog, setDialog] = useState<DialogState>({
+    open: false,
+    mode: 'create',
+    editingId: null,
+    initial: emptyInsumoForm,
   })
 
   const loadInsumos = async () => {
@@ -135,9 +127,6 @@ export default function InsumosPage() {
     loadTipos()
   }, [])
 
-  const fetchNomeSuggestions = useCallback((q: string) => insumosApi.suggestions('nome', q), [])
-  const fetchFornecedorSuggestions = useCallback((q: string) => insumosApi.suggestions('fornecedor', q), [])
-
   const filteredInsumos = insumos.filter((insumo) => {
     const matchesSearch =
       insumo.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -148,10 +137,26 @@ export default function InsumosPage() {
     return matchesSearch && matchesTipo && matchesStatus
   })
 
-  const handleOpenDialog = (insumo?: InsumoApi) => {
-    if (insumo) {
-      setEditingInsumo(insumo)
-      setFormData({
+  const openCreate = () => {
+    setDialog({
+      open: true,
+      mode: 'create',
+      editingId: null,
+      initial: {
+        ...emptyInsumoForm,
+        dataEntrada: dateOnlyToInput(new Date()),
+        tipoId: tiposInsumo[0]?.id ?? '',
+        unidadeId: unidadeAtiva?.id ?? unidades.filter((u) => u.ativa)[0]?.id ?? '',
+      },
+    })
+  }
+
+  const openEdit = (insumo: InsumoApi) => {
+    setDialog({
+      open: true,
+      mode: 'edit',
+      editingId: insumo.id,
+      initial: {
         unidadeId: insumo.unidadeId,
         nome: insumo.nome,
         lote: insumo.lote,
@@ -162,55 +167,46 @@ export default function InsumosPage() {
         precoUnitario: insumo.precoUnitario != null ? String(insumo.precoUnitario) : '',
         dataEntrada: dateOnlyToInput(insumo.dataEntrada),
         dataVencimento: dateOnlyToInput(insumo.dataVencimento),
-      })
-    } else {
-      setEditingInsumo(null)
-      setFormData({
-        ...initialFormData,
-        dataEntrada: dateOnlyToInput(new Date()),
-        tipoId: tiposInsumo[0]?.id ?? '',
-        unidadeId: unidadeAtiva?.id ?? unidades.filter((u) => u.ativa)[0]?.id ?? '',
-      })
-    }
-    setIsDialogOpen(true)
+      },
+    })
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // "Nova entrada": clona o produto (nome, tipo, fornecedor, qtd. mínima, preço) e
+  // deixa lote/quantidade/validade em branco para o usuário só trocar o lote.
+  const openDuplicate = (insumo: InsumoApi) => {
+    setDialog({
+      open: true,
+      mode: 'entrada',
+      editingId: null,
+      initial: {
+        unidadeId: insumo.unidadeId,
+        nome: insumo.nome,
+        lote: '',
+        tipoId: insumo.tipoId,
+        fornecedor: insumo.fornecedor,
+        quantidade: '0',
+        quantidadeMinima: String(insumo.quantidadeMinima),
+        precoUnitario: insumo.precoUnitario != null ? String(insumo.precoUnitario) : '',
+        dataEntrada: dateOnlyToInput(new Date()),
+        dataVencimento: '',
+      },
+    })
+  }
 
-    if (!formData.unidadeId) {
-      toast.error('Selecione uma unidade')
-      return
-    }
-
-    const payload = {
-      nome: formData.nome,
-      lote: formData.lote,
-      tipoId: formData.tipoId,
-      fornecedor: formData.fornecedor,
-      quantidade: parseInt(formData.quantidade, 10) || 0,
-      quantidadeMinima: parseInt(formData.quantidadeMinima, 10) || 0,
-      precoUnitario: formData.precoUnitario.trim() === '' ? null : parseFloat(formData.precoUnitario),
-      dataEntrada: inputDateToISO(formData.dataEntrada),
-      dataVencimento: inputDateToISO(formData.dataVencimento),
-    }
-
+  const handleSubmit = async (payload: InsumoPayload, unidadeId: string) => {
     try {
-      if (editingInsumo) {
-        await insumosApi.update(editingInsumo.id, payload)
+      if (dialog.mode === 'edit' && dialog.editingId) {
+        await insumosApi.update(dialog.editingId, payload)
         toast.success('Insumo atualizado com sucesso!')
       } else {
-        await insumosApi.create(payload, formData.unidadeId)
-        toast.success('Insumo cadastrado com sucesso!')
+        await insumosApi.create(payload, unidadeId)
+        toast.success(dialog.mode === 'entrada' ? 'Nova entrada registrada com sucesso!' : 'Insumo cadastrado com sucesso!')
       }
-      setIsDialogOpen(false)
       await loadInsumos()
     } catch (err) {
-      if (err instanceof ApiError) {
-        toast.error(err.message)
-      } else {
-        toast.error('Erro inesperado ao salvar insumo')
-      }
+      if (err instanceof ApiError) toast.error(err.message)
+      else toast.error('Erro inesperado ao salvar insumo')
+      throw err // mantém o diálogo aberto
     }
   }
 
@@ -230,6 +226,8 @@ export default function InsumosPage() {
     }
   }
 
+  const dialogText = DIALOG_TEXTS[dialog.mode]
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -237,153 +235,24 @@ export default function InsumosPage() {
           <h1 className="text-2xl font-bold text-foreground">Insumos</h1>
           <p className="text-muted-foreground">Gerencie o estoque de insumos da clínica</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog()}>
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Insumo
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
-            <DialogHeader>
-              <DialogTitle>{editingInsumo ? 'Editar Insumo' : 'Novo Insumo'}</DialogTitle>
-              <DialogDescription>
-                {editingInsumo ? 'Atualize as informações do insumo' : 'Preencha os dados para cadastrar um novo insumo'}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <FieldGroup>
-                <Field>
-                  <FieldLabel>Unidade <span className="text-destructive">*</span></FieldLabel>
-                  {editingInsumo ? (
-                    <p className="text-sm py-2 px-3 rounded-md bg-muted text-muted-foreground">
-                      {unidades.find((u) => u.id === formData.unidadeId)?.nome ?? formData.unidadeId}
-                    </p>
-                  ) : (
-                    <Select
-                      value={formData.unidadeId}
-                      onValueChange={(v) => setFormData({ ...formData, unidadeId: v })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione a unidade" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {unidades.filter((u) => u.ativa).map((u) => (
-                          <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </Field>
-                <Field>
-                  <FieldLabel>Nome</FieldLabel>
-                  <Combobox
-                    value={formData.nome}
-                    onChange={(v) => setFormData({ ...formData, nome: v })}
-                    fetchSuggestions={fetchNomeSuggestions}
-                    placeholder="Ex: Botox 100U"
-                    required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel>Lote</FieldLabel>
-                  <Input
-                    value={formData.lote}
-                    onChange={(e) => setFormData({ ...formData, lote: e.target.value })}
-                    placeholder="Ex: BTX-2024-001"
-                    required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel>Tipo</FieldLabel>
-                  <Select value={formData.tipoId} onValueChange={(v) => setFormData({ ...formData, tipoId: v })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tiposInsumo.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field>
-                  <FieldLabel>Fornecedor</FieldLabel>
-                  <Combobox
-                    value={formData.fornecedor}
-                    onChange={(v) => setFormData({ ...formData, fornecedor: v })}
-                    fetchSuggestions={fetchFornecedorSuggestions}
-                    placeholder="Ex: Allergan"
-                    required
-                  />
-                </Field>
-                <div className="grid grid-cols-2 gap-4">
-                  <Field>
-                    <FieldLabel>Quantidade</FieldLabel>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={formData.quantidade}
-                      onChange={(e) => setFormData({ ...formData, quantidade: e.target.value })}
-                      required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Qtd. Mínima</FieldLabel>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={formData.quantidadeMinima}
-                      onChange={(e) => setFormData({ ...formData, quantidadeMinima: e.target.value })}
-                      required
-                    />
-                  </Field>
-                </div>
-                <Field>
-                  <FieldLabel>Preço Unitário (R$)</FieldLabel>
-                  <Input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={formData.precoUnitario}
-                    onChange={(e) => setFormData({ ...formData, precoUnitario: e.target.value })}
-                    placeholder="0,00"
-                  />
-                  <p className="text-xs text-muted-foreground">Informe o valor de cada unidade, não o total do lote</p>
-                </Field>
-                <div className="grid grid-cols-2 gap-4">
-                  <Field>
-                    <FieldLabel>Data de Entrada</FieldLabel>
-                    <Input
-                      type="date"
-                      value={formData.dataEntrada}
-                      onChange={(e) => setFormData({ ...formData, dataEntrada: e.target.value })}
-                      required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Data de Vencimento</FieldLabel>
-                    <Input
-                      type="date"
-                      value={formData.dataVencimento}
-                      onChange={(e) => setFormData({ ...formData, dataVencimento: e.target.value })}
-                      required
-                    />
-                  </Field>
-                </div>
-                <div className="flex gap-3 pt-4">
-                  <Button type="button" variant="outline" className="flex-1" onClick={() => setIsDialogOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button type="submit" className="flex-1">
-                    {editingInsumo ? 'Salvar' : 'Cadastrar'}
-                  </Button>
-                </div>
-              </FieldGroup>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={openCreate}>
+          <Plus className="w-4 h-4 mr-2" />
+          Novo Insumo
+        </Button>
       </div>
+
+      <InsumoFormDialog
+        open={dialog.open}
+        onOpenChange={(o) => setDialog((d) => ({ ...d, open: o }))}
+        title={dialogText.title}
+        description={dialogText.description}
+        submitLabel={dialogText.submitLabel}
+        initialValues={dialog.initial}
+        tiposInsumo={tiposInsumo}
+        unidades={unidades}
+        lockUnidade={dialog.mode === 'edit'}
+        onSubmit={handleSubmit}
+      />
 
       {/* Filtros */}
       <Card>
@@ -475,10 +344,13 @@ export default function InsumosPage() {
                       {!isGlobalView && (
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(insumo)}>
+                            <Button variant="ghost" size="icon" title="Nova entrada (novo lote)" onClick={() => openDuplicate(insumo)}>
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" title="Editar" onClick={() => openEdit(insumo)}>
                               <Pencil className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setDeleteId(insumo.id)}>
+                            <Button variant="ghost" size="icon" title="Excluir" onClick={() => setDeleteId(insumo.id)}>
                               <Trash2 className="w-4 h-4 text-destructive" />
                             </Button>
                           </div>

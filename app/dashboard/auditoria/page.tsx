@@ -50,12 +50,15 @@ const ENTITY_LABELS: Record<string, string> = {
   saida: 'Saída',
   usuario: 'Usuário',
   unidade: 'Unidade',
+  pedido: 'Pedido',
 }
 
 function formatDetails(details: Record<string, unknown> | null): string {
   if (!details) return '—'
   const parts: string[] = []
   if (details.nome) parts.push(`${details.nome}`)
+  if (details.produto) parts.push(`${details.produto}`)
+  if (details.fornecedor) parts.push(`${details.fornecedor}`)
   if (details.email) parts.push(`${details.email}`)
   if (details.insumoNome) parts.push(`${details.insumoNome}`)
   if (details.quantidade) parts.push(`Qtd: ${details.quantidade}`)
@@ -154,6 +157,7 @@ export default function AuditoriaPage() {
             <SelectItem value="saida">Saída</SelectItem>
             <SelectItem value="usuario">Usuário</SelectItem>
             <SelectItem value="unidade">Unidade</SelectItem>
+            <SelectItem value="pedido">Pedido</SelectItem>
           </SelectContent>
         </Select>
         <Select value={actionFilter} onValueChange={setActionFilter}>
