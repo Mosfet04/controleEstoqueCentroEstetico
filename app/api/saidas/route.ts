@@ -1,10 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireAuth, isUser, getUnidadeIdOrGlobal, requireUnidadeAccessOrGlobal } from '@/lib/auth-helpers'
 import { saidaSchema } from '@/lib/validations'
 import { withAuditContext } from '@/lib/audit-context'
 import { nowSP } from '@/lib/utils'
+
+const saidaInclude = {
+  insumo: { select: { nome: true, lote: true } },
+  user: { select: { name: true, email: true } },
+  unidade: { select: { nome: true } },
+  tipoSaida: { select: { id: true, nome: true, slug: true, categoria: true, cor: true } },
+} satisfies Prisma.SaidaInsumoInclude
+
+function formatSaida(s: Prisma.SaidaInsumoGetPayload<{ include: typeof saidaInclude }>) {
+  return {
+    id: s.id,
+    insumoId: s.insumoId,
+    insumoNome: s.insumo.nome,
+    insumoLote: s.insumo.lote,
+    quantidade: s.quantidade,
+    tipoSaida: s.tipoSaida,
+    motivo: s.motivo,
+    responsavel: s.user.name,
+    observacao: s.observacao,
+    dataRetirada: s.dataRetirada,
+    createdAt: s.createdAt,
+    unidadeNome: s.unidade.nome,
+  }
+}
 
 export async function GET(request: NextRequest) {
   const user = await requireAuth(request)
@@ -17,33 +42,48 @@ export async function GET(request: NextRequest) {
   if (unidadeId instanceof NextResponse) return unidadeId
 
   try {
-    const saidas = await prisma.saidaInsumo.findMany({
-      where: { ...(unidadeId ? { unidadeId } : {}) },
-      include: {
-        insumo: { select: { nome: true, lote: true } },
-        user: { select: { name: true, email: true } },
-        unidade: { select: { nome: true } },
-        tipoSaida: { select: { id: true, nome: true, slug: true, categoria: true, cor: true } },
-      },
-      orderBy: { dataRetirada: 'desc' },
+    const { searchParams } = request.nextUrl
+    const search = searchParams.get('q')?.trim()
+    const tipoSaidaId = searchParams.get('tipoSaidaId')
+
+    const where: Prisma.SaidaInsumoWhereInput = {
+      ...(unidadeId ? { unidadeId } : {}),
+      ...(tipoSaidaId ? { tipoSaidaId } : {}),
+      ...(search
+        ? {
+            OR: [
+              { insumo: { nome: { contains: search, mode: 'insensitive' } } },
+              { user: { name: { contains: search, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    }
+
+    const orderBy: Prisma.SaidaInsumoOrderByWithRelationInput = { dataRetirada: 'desc' }
+
+    // Modo legado (sem `page`): retorna um array simples.
+    if (!searchParams.has('page')) {
+      const saidas = await prisma.saidaInsumo.findMany({ where, include: saidaInclude, orderBy })
+      return NextResponse.json(saidas.map(formatSaida))
+    }
+
+    // Modo paginado: retorna { data, total, page, limit, totalPages }.
+    const page = Math.max(1, Number(searchParams.get('page')) || 1)
+    const limit = Math.min(Math.max(1, Number(searchParams.get('limit')) || 20), 100)
+    const skip = (page - 1) * limit
+
+    const [rows, total] = await Promise.all([
+      prisma.saidaInsumo.findMany({ where, include: saidaInclude, orderBy, skip, take: limit }),
+      prisma.saidaInsumo.count({ where }),
+    ])
+
+    return NextResponse.json({
+      data: rows.map(formatSaida),
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
     })
-
-    const formatted = saidas.map((s) => ({
-      id: s.id,
-      insumoId: s.insumoId,
-      insumoNome: s.insumo.nome,
-      insumoLote: s.insumo.lote,
-      quantidade: s.quantidade,
-      tipoSaida: s.tipoSaida,
-      motivo: s.motivo,
-      responsavel: s.user.name,
-      observacao: s.observacao,
-      dataRetirada: s.dataRetirada,
-      createdAt: s.createdAt,
-      unidadeNome: s.unidade.nome,
-    }))
-
-    return NextResponse.json(formatted)
   } catch (error) {
     Sentry.captureException(error, { tags: { route: 'GET /api/saidas' } })
     return NextResponse.json({ error: 'Erro ao buscar saídas' }, { status: 500 })

@@ -327,7 +327,7 @@ O banco utiliza **PostgreSQL** com **Prisma ORM**. O schema define os modelos e 
 
 | Método | Rota | Auth | Descrição |
 | --- | --- | --- | --- |
-| GET | `/api/saidas` | Autenticado | Lista saídas da unidade |
+| GET | `/api/saidas` | Autenticado | Lista saídas com filtros (`q`, `tipoSaidaId`). Com `page` retorna paginado (`page`, `limit`) no formato `{ data, total, page, limit, totalPages }`; sem `page` retorna array |
 | POST | `/api/saidas` | Autenticado | Registra saída (transação atômica: verifica estoque → decrementa → cria registro) |
 
 ### Pedidos a Fornecedores

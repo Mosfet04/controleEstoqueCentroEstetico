@@ -258,8 +258,29 @@ export interface SaidaApi {
   unidadeNome?: string
 }
 
+export interface PaginatedSaidas {
+  data: SaidaApi[]
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+}
+
 export const saidasApi = {
   list: () => apiFetch<SaidaApi[]>('/api/saidas'),
+  listPaged: (params: {
+    page: number
+    limit?: number
+    q?: string
+    tipoSaidaId?: string
+  }) => {
+    const search = new URLSearchParams()
+    search.set('page', String(params.page))
+    if (params.limit) search.set('limit', String(params.limit))
+    if (params.q) search.set('q', params.q)
+    if (params.tipoSaidaId) search.set('tipoSaidaId', params.tipoSaidaId)
+    return apiFetch<PaginatedSaidas>(`/api/saidas?${search.toString()}`)
+  },
   create: (data: {
     insumoId: string
     quantidade: number

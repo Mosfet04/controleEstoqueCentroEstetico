@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -63,6 +63,8 @@ const SUBMIT_LABELS: Record<CategoriaSaida, string> = {
   ajuste:   'Registrar Ajuste',
 }
 
+const PAGE_SIZE = 20
+
 export default function SaidasPage() {
   const { user } = useAuth()
   const { isGlobalView, unidades, unidadeAtiva } = useUnidade()
@@ -70,22 +72,33 @@ export default function SaidasPage() {
   const [insumos, setInsumos] = useState<InsumoApi[]>([])
   const [tiposSaida, setTiposSaida] = useState<TipoSaidaApi[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [tipoFiltro, setTipoFiltro] = useState<string>('todos')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [formData, setFormData] = useState<SaidaFormData>(initialFormData)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const loadData = async () => {
+  const loadSaidas = useCallback(async () => {
     try {
-      const saidasData = await saidasApi.list()
-      setSaidas(saidasData)
+      const res = await saidasApi.listPaged({
+        page,
+        limit: PAGE_SIZE,
+        q: debouncedSearch || undefined,
+        tipoSaidaId: tipoFiltro !== 'todos' ? tipoFiltro : undefined,
+      })
+      setSaidas(res.data)
+      setTotal(res.total)
+      setTotalPages(res.totalPages)
     } catch (err) {
       if (err instanceof ApiError && err.status !== 401) {
         toast.error('Erro ao carregar saídas')
       }
     }
-  }
+  }, [page, debouncedSearch, tipoFiltro])
 
   const loadInsumosForUnit = async (unitId: string) => {
     try {
@@ -108,20 +121,28 @@ export default function SaidasPage() {
   }
 
   useEffect(() => {
-    loadData()
     tiposSaidaApi.list()
       .then((tipos) => setTiposSaida(tipos.filter((t) => t.ativo)))
       .catch(() => {})
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const filteredSaidas = saidas.filter((saida) => {
-    const matchSearch =
-      saida.insumoNome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      saida.responsavel.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchTipo = tipoFiltro === 'todos' || saida.tipoSaida?.id === tipoFiltro
-    return matchSearch && matchTipo
-  })
+  useEffect(() => {
+    loadSaidas()
+  }, [loadSaidas])
+
+  // Debounce da busca: volta para a página 1 e aplica o termo após a digitação parar.
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim())
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(handle)
+  }, [searchTerm])
+
+  // Garante que a página atual nunca ultrapasse o total (ex.: após novo registro).
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
 
   const selectedInsumo = insumos.find((i) => i.id === formData.insumoId)
   const tipoSaidaSelecionado = tiposSaida.find((t) => t.id === formData.tipoSaidaId)
@@ -178,7 +199,7 @@ export default function SaidasPage() {
       setIsDialogOpen(false)
       setFormData(initialFormData)
       setInsumos([])
-      await loadData()
+      await loadSaidas()
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 409) {
@@ -419,7 +440,7 @@ export default function SaidasPage() {
             </div>
             <Select
               value={tipoFiltro}
-              onValueChange={(v) => setTipoFiltro(v)}
+              onValueChange={(v) => { setTipoFiltro(v); setPage(1) }}
             >
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue />
@@ -442,7 +463,7 @@ export default function SaidasPage() {
             <PackageMinus className="w-5 h-5" />
             Histórico de Saídas
           </CardTitle>
-          <CardDescription>{filteredSaidas.length} registro(s) encontrado(s)</CardDescription>
+          <CardDescription>{total} registro(s) encontrado(s)</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -459,14 +480,14 @@ export default function SaidasPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredSaidas.length === 0 ? (
+                {saidas.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={isGlobalView ? 7 : 6} className="text-center py-8 text-muted-foreground">
                       Nenhuma saída registrada
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredSaidas.map((saida) => (
+                  saidas.map((saida) => (
                     <TableRow key={saida.id}>
                       <TableCell className="font-medium">
                         <div>{saida.insumoNome}</div>
@@ -506,6 +527,32 @@ export default function SaidasPage() {
               </TableBody>
             </Table>
           </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between gap-4 pt-4">
+              <p className="text-sm text-muted-foreground">
+                Página {page} de {totalPages}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Próxima
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
